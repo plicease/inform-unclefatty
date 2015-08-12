@@ -1,0 +1,67 @@
+Array ufstring string "core software international presents ";
+Array ufstring1 string "uncle fatty (interactive) ";
+
+Global uf = ufstring;
+
+Global n = 0;
+Global offset = 20;
+
+[ writedown i p c v;
+	if(n==46) rtrue;
+	n++;
+	!print "n=", n, "^";
+	for(i=1: i<n && i<=uf->0: i++) {
+		!print "i=", i, "^";
+		p = n - i;
+		if(p>10)p=10;
+		v = offset + i;
+		p--;
+		if(p>0) { @set_cursor p v; @print_char ' '; }
+		p++;
+		@set_cursor p v;
+		c = uf -> i;
+		@print_char c;
+	}
+	rfalse;
+];
+
+[ writeup i p c v;
+	if(n==0) rtrue;
+	n--;
+	!print "n=", n, "^";
+	for(i=1: i<n && i<=uf->0: i++) {
+		!print "i=", i, "^";
+		p = n - i;
+		if(p>10)p=10;
+		v = offset + i;
+		p++;
+		@set_cursor p v; @print_char ' ';
+		p--;
+		@set_cursor p v;
+		c = uf -> i;
+		if(p>1) @print_char c;
+	}
+	rfalse;
+];
+
+Global pause_counter = 0;
+
+[ pause;
+	pause_counter++;
+	if(pause_counter >5) {
+		pause_counter = 0;
+		rtrue;
+	}
+	rfalse;
+];
+
+[ Main dummy;
+	@set_window 1;
+	@read_char 1 1 writedown -> dummy;
+	@read_char 1 1 pause -> dummy;
+	@read_char 1 1 writeup -> dummy;
+	uf = ufstring1;
+	@read_char 1 1 writedown -> dummy;
+	@read_char 1 1 pause -> dummy;
+	@read_char 1 1 writeup -> dummy;
+];

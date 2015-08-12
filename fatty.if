@@ -1,0 +1,6402 @@
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	uncle fatty (source code)
+!!	copyright 2000 richard ess
+!!	all rights reserved
+!!	cross me and die... etc. etc.
+!!
+!!	"when your 12 years old, your feelings maybe immature, they're
+!!	still real." -- unknown on (that not eating disorder)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+	!! FIXME !! add the M. sequence
+	!! FIXME !! this game could use a platypus.
+
+Constant Story		"uncle fatty (interactive)";
+Constant Headline	"^remorse of a four year old killer^
+			copyright 2000 by richard ess^
+			year of the rose^";
+
+Constant DIALECT_US;		! shesh.  bloddy poms.
+!Constant MAX_CARRIED 10;	! don't use this
+Constant PROVIDE_SHOW_SCOPE 1;	! use a ShowScope() based scoping for show verb
+Constant PROVIDE_RUNTOABLE 1;
+
+Release 1;		! he's going the distance... he's going for speed...
+
+	! @(#)uncle fatty (interactive); copyright 2000 richard ess";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	simple routines
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ not x;	!! `~~' is a really bad choice for a logical not operator
+	return x == 0;
+];
+
+[ odd x;
+	return (x % 2 == 1);
+];
+
+[ even x;
+	return (x % 2 == 0);
+];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	scoring (oh yeah, baby)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Constant MAX_SCORE	20;
+Constant NUMBER_TASKS	20;
+!Constant OBJECT_SCORE	1;		! we don't use this in uncle fatty
+!Constant ROOM_SCORE	1;		! nor this
+Constant CONSISTANT_SCORE 1;
+Constant TASKS_PROVIDED;
+Constant SACK_OBJECT	pillow;
+
+#ifndef DEBUG; Constant NO_PLACES; #endif;
+
+Array task_scores -> 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1;
+
+[ PrintTaskName ach;		!! FIXME !! print in order...
+	switch(ach) {
+		0: "getting astrotrain.";
+		1: "getting pillow.";
+		2: "examining stars.";
+		3: "selected a flower.";
+		4: "feeding uncle fatty.";
+		5: "finding the gold coin.";
+		6: "not starving.";
+		7: "delivering letter.";
+		8: "schwartz redoc";
+		9: "rot redoc";
+		10: "exhausting cpu memory";
+		11: "launching rubber band at joshua kent.";
+		12: "gelb redoc";
+		13: "scaring rolo with spider.";
+		14: "getting by psycho dog.";
+		15: "roserot redoc";
+		16: "chasing joshua kent with worm";	!! FIXME !!
+		17: "scoring with monique";		!! FIXME !!
+		18: "scoring with zo@:e";		!! FIXME !!
+		19: "reading hellbrun redoc";
+	}
+];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	anoying things in the standard library
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Replace DigSub;
+Replace EatSub;
+Replace PraySub;	!! uh... dumb message
+Replace selfobj;	!! hrm.  remove all together and use ego instead
+Replace WakeSub;
+Replace ShowSub;
+Replace JumpSub;
+Replace JumpOverSub;
+
+Include "parser";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	progress bit fields.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Global black_goals = 0;
+Constant BG_FEED_FATTY $$001;
+Constant BG_FEED_SELF  $$010;
+Constant BG_DELIVER_MAIL $$100;
+Constant BG_ALL $$111;
+
+[ BlackGoals i;
+	if(black_goals == BG_ALL) rtrue;
+	black_goals = black_goals | i;
+	if(black_goals == BG_ALL) {
+		if(location == bus_stop) {
+			print "^^the school hoverbus arrives from the
+				red sky.^";
+		} else {
+			print "^^you have the overriding feeling that it is
+				time to meet your bus at the bus stop (to
+				the west).^";
+		}
+		give bus_stop general;
+		move bus to bus_stop;
+		StartDaemon(kent);
+		StartDaemon(bus_driver);
+	}
+];
+
+Global pink_goals = 0;
+Constant PG_MONIQUE_SCORE $$001;
+Constant PG_ZOE_SCORE $$010;
+Constant PG_KENT_HARASS $100;
+Constant PG_ALL $$111;
+
+!! FIXME !!
+[ PinkGoals i;
+	pink_goals = pink_goals | i;
+	if(pink_goals == PG_ALL) {
+	}
+]; 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	ego is the SIERRA notation for the player.
+!!	id is the name of a lesser game company which produced quake
+!!	the movie `forbidden planet' predates quake
+!!	super ego is thus far unused.
+!!	some quack named freud claims credit for all of this.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object ego "ego"
+	with	short_name [;  return L__M(##Miscellany, 18); ],
+		description [;  return L__M(##Miscellany, 19); ],
+		after NULL,
+		!life NULL,
+		each_turn NULL,
+		time_out NULL,
+		describe NULL,
+		capacity 10,
+		parse_name 0,
+		number 0,
+
+		! specific to this game !
+		name "ego" "player" "self",
+		eaten 0,
+		age 4,
+		weight 20,
+		orders [;
+			if(ego has invisible && actor==self) {
+				if(action == ##Answer or ##Tell or ##Ask)
+					"it is impolite to talk to people
+					while you are invisible.";
+				if(action == ##Give or ##Show
+				&& second ~= unclefatty)
+					"it is impolite to give things to
+					people while you are invisible.";
+			}
+			if(parent(ego) == bus
+			&& parent(bus) == bus_route
+			&& (action == ##Go
+			|| action == ##Exit))
+				"please do not attempt to exit until the 
+				hoverbus has come to a complete stop."; 
+		],
+		life [;
+			Tease:	"~hey stupid.  stop teasing yourself.~";
+			Ask: "you'd like to be able to answer your own
+				questions, but then they wouldn't be
+				questions, would they?";
+		],
+		before [;
+			Examine:if(self has invisible)
+					"you appear to be invisible.
+					that is to say you don't appear
+					to be anything.";
+				"100% genuine you.";
+			Push:	"maybe not.";
+		],
+
+	has	concealed animate proper transparent;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	RANKS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ PrintRank;	!! FIXME !!
+	print ", earning you the rank of ";
+	switch(score) {
+		0 : "clueless hovershrimp.";
+		1 to 10 : "pig scout.";
+		11 to 20 : "nla colony citizen.";
+		21 to 30 : "john donovan.";
+		31 to 40 : "data scout.";
+	}
+];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	what else can we do with LibaryMessages ?  i can find no documentation
+!!	on this.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object LibraryMessages
+	with	before	[;
+			Prompt:	style bold;
+				print "^uf";
+				style roman;
+				print "> ";
+				rtrue;
+		];
+
+Include "verblib";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Attribute thorns;
+Attribute outside;
+Attribute button;
+Attribute invisible;
+Attribute liquid;
+Attribute runtoable;
+
+Global phase = 1;		! FUCK you mr farly.
+
+Array object_list --> 64;	! probably too many, but hey.  i'm a
+				! heavy tipper.
+Array string_list --> 64;
+
+Global StrDirectionTo = "oops";
+Global StrDirectionFrom = "oops";
+
+[ PrintObjectList n i o;
+	for(i=0: i<n: i++) {
+		o = object_list --> (i+1);
+		if(o provides isdead
+		&& o.isdead())
+			print "a dead ", (object) o;
+		else
+			print (a) o;
+		if(i == n-2) print " and ";
+		else if(i == n-1) print ".";
+		else print ", ";
+	}
+];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	special classes
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object heaven;		! used redocs go here
+
+Global redoc_count = 0;
+
+Class redoc	! redoc		! set color, preface, ach and message !
+	with	plural "redocs",
+		ach -1,
+		preface "you hear god say",
+		message "this space for rent",
+		color "",
+		getcolor [; return self.color; ],
+		description [;
+			"this is a ", (string) self.color , " redoc.  it has a 
+			button on it.";
+		],
+		before [;
+			Push:
+				"to activate the redoc, you will have to push
+				the button on the redoc, not the redoc itself.";
+		],
+		buttonf [;
+			print (string) self.preface, " ~";
+			if(self provides messagef) {
+				self.messagef();
+			} else {
+				print (string) self.message;
+			}
+			print "~";
+			move self to heaven;
+			print "  the redoc crumbles into dust.";
+			if(self.ach ~= -1) {
+				Achieved(self.ach);
+			}
+			if(redoc_count++ == 0)
+				"^[you may use the recall verb to
+				remember the message]";
+			"";
+		],
+	has button;
+
+Object hell "hell"
+	with name "hell";
+			! this is where adult ego's memories will be stored.
+			! also, worms live here when they are not on the map.
+			! mrs. houitzer makes a brief visit (far too brief
+			! in fact) if ego gives her an apple.
+
+Object -> cooties "cooties"
+	with	name "cooties" "cootie",
+		description "argh!  its the horrible cooties plague.  an
+			epidemic brought to male kind by the female.  the 
+			history of cooties go back to the forty fifth century
+			bc when eve gave adam the cooties, and god expeled
+			them from paradise.",
+		before [;
+			Drop:	"that is something you cannot drop.  you will
+				have to give them to someone else.";
+			Insert, PutOn:
+				"that is not something you can do with
+				cooties.  you will have to give them to
+				someone else.";
+		]
+	has	pluralname;
+
+redoc -> copy_redoc "roserot copy redoc"
+	with	name "roserot" "redoc" "pink" "cp" "copy",
+		pre_button [;
+			if(parent(roserot_redoc) == classroom or monique)
+				rfalse;
+			"before getting too excited with the contents
+			of the roserot redoc, you had better return
+			the original, so that no one suspects
+			anything.";
+		];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	FLOWERS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Global taken_flower = 0;
+
+Class plastic_flower
+	with
+		name "plastic" "flower",
+		color,
+		before [;
+			Examine: print "it is ", (string) self.color, "
+				and has petals";
+				if(self has thorns) print " and thorns";
+				".";
+			Smell:	"it smells like model airplane glue.";
+			Take:	if(parent(self) hasnt outside) rfalse;
+				if(taken_flower == 1 && parent(self) ~= pillow) 
+					"you shouldn't need to pick more
+					than one.";
+			Drop:	"you don't want to throw that just
+				anywhere.";
+			Insert, PutOn:
+				if(second == pillow)
+					rfalse;
+				"you don't want to put that just anywhere.";
+			Touch:	if(self has thorns)
+					"ouch!  you pricked yourself.";
+				"let's not get all touchy feely now ok?";
+			],
+		after [;
+			Take:
+				if(location == home_front_yard) {
+					"you don't want these flowers.";
+				} else if(location == plastic_garden) {
+					taken_flower = 1;
+					Achieved(3);
+					give plastic_bee ~concealed;
+					give metal_rod ~concealed;
+					give garden_dirt ~concealed;
+					"your removal of the flower has
+					revealed
+					a plastic bumblebee on a thin metal rod
+					sticking out of the ground, which you
+					can now see is mostly red dirt.";
+				}
+			];
+
+Class plastic_dandelion
+	with
+		name "yellow" "dandelion" "dandy" "lion",
+		short_name "plastic dandelion",
+		color "yellow",
+		plural "dandelions",
+	class	plastic_flower;
+
+Class plastic_rose
+	with
+		name "rose",
+		create [;	! unused
+				self.color = random("red", "pink", "yellow");
+			],
+		plural "roses",
+		list_together "roses",
+	class	plastic_flower,
+	has	thorns;
+
+Class plastic_tulip
+	with
+		name "tulip" "flower" "blue",
+		short_name "blue tulip",
+		color "blue",
+		plural "tulips",
+	class	plastic_flower;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	GADGET
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Class gadget
+	with
+		color "",
+		other_property "",
+		plural "gadgets",
+		description [;
+				print "this gadget is ", (string)
+				self.color, " with ",
+				(string) self.other_property, ".  it has
+				a single button.";
+				style underline;
+				print "^^~it is said that `any sufficiently
+				   advanced technology is indistinguishable
+				   from magic.' of course i didn't know that
+				   at the time.~.^";
+				style roman;
+				rtrue;
+			],
+		buttonf [;
+			!! actually, this should never be called.
+			!! any gadget designed for the game will have a
+			!! purpose.  this is one of those fancy virutal
+			!! functions, as they say in the C++ world.
+			"this gadget seems to be defective.  the button
+			doesn't do anything.";
+		],
+	has button;
+
+Constant Phase1_rooms_num 12;
+
+Object transporter_gadget "red grooved gadget"	!! FIXME !! move to final
+							 !! location
+	with
+		name "transporter" "red" "gadget",
+		color "red",
+		other_property "grooves",
+		buttonf [n m j;
+			if(location hasnt outside) {
+				"this gadget appears to only work outside.";
+			}
+			switch(phase) {
+				1, 3:
+					for(n=0,m=0: n<Phase1_rooms_num: n++) {
+						j = Phase1_rooms --> n;
+						if(j has outside
+						&& j ~= location) {
+							object_list --> (m++) = j;
+						}
+					}
+				2:
+					for(n=0,m=0: n<Phase2_rooms_num: n++) {
+						j = Phase2_rooms --> n;
+						if(j has outside
+						&& j ~= location) {
+							object_list --> (m++) = j;
+						}
+					}
+			}
+			m = random(m)-1;
+			print "you remateralize somewhere else.^";
+			PlayerTo(object_list --> m);
+		],
+	class	gadget;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	TABLE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Class table
+	with
+		name "table",
+		short_name "table",
+		plural "tables",
+		print_list [n x pl;
+			objectloop(x in self) {
+				object_list --> (++n) = x;
+				if(x has pluralname) pl = 1;
+			}
+			if(n == 0) "there is nothing on ", (the) self, ".";
+			print "on ", (the) self;
+			if(n == 1 && pl == 0) print " is "; else print " are ";
+			PrintObjectList(n);
+			print "^";
+		],
+	has	scenery static supporter;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	TV
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Class tv
+	with	before
+			[;
+			Examine:
+				if(self hasnt on) {
+					"the television is off.  ";
+				} else { 
+					print "you switch stations.  ";
+					switch(random(8)) {
+						1: "an advertisement for used
+						    hovercars plays on the
+						    television.";
+						2: "a sitcom about a radio shrink
+						    who lives with his dad plays
+						    on the television.";
+						3: "a commercial for a
+						    high school tutoring
+						    service plays on the
+						    television.";
+						4: "a cartoon about
+						   transforming robots is
+						   on.  man is it cool.";
+						5: "a movie about three
+						   cops and a hooker
+						   plays on the
+						   television.";
+						6: "just static on this one.";
+						7: "a nature show about
+						   grasshoppers plays 
+						   on the television.";
+						8: "a documentry about
+						   killer cults plays 
+						   on the television.";
+					}
+				}
+			],
+	has scenery switchable static;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	PHOTOGRAPHS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Class photograph
+	with
+		name "photograph" "photo" "picture",
+		length	5,
+		height	1,
+		subject "an ant hill",
+		description [;
+				"this photo is about ", self.length, " foot by ",
+				self.height, " and is a picture of ",
+				(string) self.subject, ".";
+			],
+		plural "photographs",
+	has	scenery;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	LIQUIDS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+class liquidobj
+	with
+		before [;
+			Take: "it is going to be difficult to take the
+				liquid without it flowing through your
+				fingers.";
+			Drink: remove self;
+				"my that was tasty.";
+			Insert:	"simon says `pour liquids.'";
+		],
+		article "some",
+	has	liquid;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	PARENT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+class parent
+	has animate proper transparent; ! HA, that's hilerious
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	APPLE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Class apple(15)
+	with
+		name "apple" "untainted" "normal",
+		short_name "apple",
+		plural "apples",
+		description
+			"this is a mighty juicy looking apple.  yum.",
+	has	edible;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	RANDOM MOVEMENT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Class captureable
+	with	oxygen 10,
+		isdead [; if(self has general) rtrue; rfalse; ],
+		escape [;
+			if(parent(jar) ~= ego) {
+				move self to parent(jar);
+				rtrue;
+			}
+			move self to location;
+			"", (the) self, " escapes from the open jar.";
+		],
+		check_oxygen [;
+			if(jar hasnt open
+			&& jar hasnt general) {
+				self.oxygen--;
+				if(self.oxygen == 0) {
+					give self general;
+					StopDaemon(self);
+					if(parent(jar) == ego)
+						"", (the) self, " has run out
+						of oxygen and died.";
+					else
+						rtrue;
+				}
+			}
+			if(self hasnt general
+			&& jar has open
+			&& random(10) == 4) {
+				self.escape();
+			}
+			if(jar has open
+			|| jar has general)
+				self.oxygen = 10;
+		],
+		before [;
+			Take:	if(parent(self) == jar)
+					"if you took ", (the) self, " from the
+					jar, then it would escape.";
+				"you will need to capture ", (the) self, " in
+				something.";
+			Capture:if(second == jar) {
+				if(jar hasnt open)
+					"first open the jar.";
+				move self to jar;
+				"it takes some time, but you manage it.";
+			}
+		];
+
+Class random_movement
+	with	daemon
+		[ rfrom rto i;
+			if(parent(self) hasnt outside) rtrue;
+			i = self.getrandom();
+			if(i == 1) {
+				rfrom = parent(self);
+				rto = rfrom.random_exit();
+				if(rto has outside) {
+					move self to rto;
+					if(self provides alsomove)
+						self.alsomove(rfrom, rto);
+					if(location == rfrom) {
+						return self.moveto();
+					}
+					if(location == rto) {
+						return self.movefrom();
+					}
+				}
+			}
+			if(location == parent(self)
+			&& self provides stationary) {
+				return self.stationary(i);
+			}
+			rtrue;
+		]
+	has	animate;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	WORMS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Class worm
+	with
+		name "earth" "worm",
+		plural "earth worms",
+		describe [;
+			if(parent(self) == ego)
+				"^the worm squirms between your two fingers.";
+			if(parent(self) == pillow)
+				"^the earth worm squirms in your pillow.";
+			"^an earth worm squirms here.";
+		],
+		daemon [ x;
+			if(parent(self) == ego
+			|| parent(self) == pillow)
+				rtrue;
+			if(random(10) > 5		! cancle change of state
+			&& parent(worm1) ~= hell	! if there exists one
+			&& parent(worm2) ~= hell	! worm out of hell
+			&& parent(worm3) ~= hell)
+				rtrue;
+			if(parent(self) == hell) {
+				x = random(pit1, pit2, pit3);
+				move self to x;
+				if(location == x)
+					"^an earth worm sticks its head out of the mud.";
+				rtrue;
+			}
+			x = parent(self);
+			move self to hell;
+			if(x == location)
+				"^an earth worm digs itself into the ground.";
+		],
+		live [; self.describe(); ];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	INSECTS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Class grasshopper class random_movement captureable
+	with
+		name "grasshopper" "insect" "grass" "hopper",
+		plural "grasshoppers",
+		describe [;
+			if(self has general)
+				"there is a dead grasshopper here.";
+			rtrue;
+		],
+		daemon [;
+			if(parent(self) == jar) self.check_oxygen();
+			self.random_movement::daemon();
+		],
+		getrandom [;	return random(1, 2, 2, 3, 4); ],
+		moveto [;	"^", (a) self, " bounds away out of
+				view to ", (string) StrDirectionTo, "."; ],
+		movefrom [;	"^", (a) self, " bounds into view from ",
+				(string) StrDirectionFrom, "."; ],
+		stationary
+		[i;
+			if(i == 3)
+				"^", (a) self, " gives a chipper chirp.";
+			"^", (a) self, " jumps about playfully.";
+		],
+		color "",
+		description [;
+			print "there is a ";
+			if(self has general)
+				print "dead ";
+			"", (string) self.color, " grasshopper here.";
+		],
+		life [;
+			Kiss:	if(self has general)
+					"it is already dead.";
+				"the grasshopper jumps out of harms way
+				as you enthusiastically attempt to make
+				friends with it.";
+			Attack, Squeeze:
+				remove self;
+				StopDaemon(self);
+				"congratulations, you managed to squish
+				the grasshopper.";
+			Tease:	"i dunno if you realize it, but ", 
+				(the) self, " doesn't understand
+				english.";
+		];
+
+Class fly class random_movement captureable
+	with
+		name "fly" "insect",
+		plural "house flies",
+		daemon [;
+			if(parent(self) == jar) self.check_oxygen();
+			self.random_movement::daemon();
+		],
+		describe [; rtrue; ],
+		last_random 1,
+		getrandom
+		[;
+			if(self.last_random == 1) {
+				self.last_random = random(2,3,4,5,6,7);
+				return self.last_random;
+			}
+			self.last_random = random(1,2,3,4,5,6,7);
+			return self.last_random;
+			
+		],
+		moveto [;	"^", (a) self, " darts out of
+				view to ", (string) StrDirectionTo, "."; ],
+		movefrom [;	"^", (a) self, " flies into view from ",
+				(string) StrDirectionFrom, "."; ],
+		stationary [i;
+			switch(i) {
+				2,6: "^", (a) self, " flies around in the vacinity.";
+				3,7: "^you can hear ", (a) self, " buzzing somewhere nearby.";
+				4: "^a small flying insect darts past your nose.";
+				5: "^", (a) self, " buzzes by your ear.";
+			}
+		],
+		description "a small flying insect.",
+		life [; 
+			Kiss:	"", (the) self, " buzzes out of harms way
+				as you enthusiastically attempt to make
+				friends with it.";
+			Attack, Squeeze:
+				if(random(4) == 1) {
+					remove self;
+					StopDaemon(self);
+					"congratulations, ", (the) self, " is no more.";
+				} else {
+					"drat!  missed.";
+				}
+			Tease:	"yeah... you do that.";
+		];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	PHASE 1 map
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Array Phase1_rooms --> bus_stop
+		log_cabin_room
+		home_front_yard
+		shiny_sector
+		home_garage
+		home_living_room
+		home_kitchen
+		plastic_garden
+		home_patio
+		home_computer_room
+		home_hallway
+		bedroom;
+
+
+!!                                                  shiny_sector
+!!                                                 /
+!!  bus_stop --- log_cabin_room --- home_front_yard
+!!                             ___/d      |        |
+!!                         ___/ home_garage --- home_living_room---home_kitchen
+!!                    ____/                       u|d
+!!               ____/  home_computer_room --- home_hallway --- bedroom
+!!            u/                                                   |
+!! plastic_garden ---------------------------------------------- home_patio
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	ego's room
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object bedroom "bedroom"
+	with	name "bedroom",
+		description
+		[;
+			print "your bedroom is unkempt as usual.  bed is
+				unmaid.  your collection of
+				transformers are engaged in a battle to
+				the death in your collection cabinet.  an 
+				old fashion nintendo 4096 systems sits
+				precariously on a rounded television set.  your 
+				desk is a mess of papers, none of
+				which are terribly interesting.^^";
+			"to the south are wide sliding glass doors,
+				through which you can see the red sky. to
+				the north is a large mirror.  to the west
+				is the hallway to the rest of the
+				house.";
+		],
+		w_to	[;
+				if(parent(sheet) == ego or pillow)
+					"mother would have forty fits if she caught
+					you lugging your sheet out of your room.";
+				if(parent(blanket) == ego or pillow)
+					"mother would have forty fits if she caught
+					you lugging your blanket out of your room.";
+				if(parent(clothes) == ego && clothes has worn)
+					return home_hallway;
+				"maybe if you got dressed first.";
+			],
+		s_to	[;
+				if(parent(sheet) == ego or pillow)
+					"mother would have forty fits if she caught
+					you lugging your sheet out of your room.";
+				if(parent(blanket) == ego or pillow)
+					"mother would have forty fits if she caught
+					you lugging your blanket out of your room.";
+				if(parent(clothes) == ego && clothes has worn)
+					return glass_door;
+				"maybe if you got dressed first.";
+			],
+	has	light;
+
+redoc -> schwartz_redoc "schwartz redoc"
+	with
+		name "schwartz" "redoc" "black",
+		ach 8,
+		color "schwartz",
+		preface "you hear your mother say",
+		message "morning dear.  now that you have managed to
+			roll out of bed, make sure you feed uncle fatty, 
+			check the mail and have breakfast before going
+			to school."; 
+
+Object -> cabinet "collection cabinet"
+	with
+		name "cabinet" "collection",
+		description
+			"you are a pack rat in all things.  here you keep
+			 your various collections of stamps, coins, and
+			 your most prized of all collections: your
+			 transformers.",
+		react_before [;
+			Insert:
+				if(second == self)
+					"i don't think that belongs there.";
+		],
+	has	scenery open container static;
+
+Object -> -> astrotrain "astrotrain"
+	with
+		name "astrotrain" "transformer" "decepticon" "toy",
+		description
+			"this innocent looking toy is capable of
+			 changing form from robot, to train, to space
+			 shuttle and back.  what makes this character
+			 particularly interesting is the fact that he is
+			 able to transform in to a train and drive
+			 around.",
+		after
+			[;	Take:	Achieved(0);
+					"you grab astrotrain and
+					 fly him around a bit
+					 until you are
+					 satisfied.";
+			],
+		before
+			[;	Drop: 	"you don't want to drop
+					that here.^";
+				Insert: if(pillow == second)
+						rfalse;
+					print "best that you hang on to
+						him.  he may be an
+						antique one day.^";
+					rtrue;
+			],
+	has	proper;
+
+Object -> -> coins "coins"
+	with
+		name "coins",
+		description
+			"you have a whole bunch of shiny silver coins
+			 from an old earth colony named australia.",
+		before [;
+			Take:	"the coins are a valuable collection
+				which are best left here.";
+		],
+	has	scenery static pluralname;
+
+Object -> -> stamps "stamps"
+	with
+		name "stamps",
+		description
+			"sticky thingies which where once used to send
+			 little pieces of paper where one wanted to send
+			 them to.",
+		before [;
+			Take:	"the stamps are a valuable collection
+				which are best left here.";
+		],
+	has	scenery static pluralname;
+
+
+Object -> -> transformers "transformers"
+	with
+		name "transformers" "toys",
+		description
+			"a whole slew of cybertronian warriors in various
+			 modes are engaged in a silent, motionless battle
+			 on the top shelf of your collection cabinet. you
+			 have each of their names and abilities
+			 memorized, but today astrotrain sticks out to
+			 you.",
+		before
+			[;	Take:	"there are an awful lot of
+						them.  perhaps you should
+						chose one to take.";
+			],
+	has	scenery pluralname static;
+
+table -> desk "desk"
+	with
+		name "desk" "table",
+		description
+			"your desk is messy.  there are a number of
+			 papers in one corner, and in the other is a
+			tv.",
+		capacity 2,
+	has	scenery supporter static;
+
+Object -> -> papers "papers"
+	with	name "papers",
+		description
+			"this pile of papers consist of old homework
+			 assignments and various receipts.",
+		before [;
+			Take: "you don't want them";
+		],
+	has	scenery static pluralname;
+
+tv -> -> bedroom_tv "tv"
+	with
+		name "tv" "television" "boobtube" "screen" "bx4",
+		description
+			[;
+				print "it's just your standard round model Bx4.
+				 on top sits your nintendo, which you haven't
+				 played for days.";
+			],
+		capacity 1,
+	has	supporter;
+
+Object -> -> -> nintendo "nintendo 4096 system"
+	with
+		name "nintendo" "video" "game" "4096",
+		description
+			"it has fantastic 3d graphics.  your favorite
+			 game is about a little character who wonders
+			 around and slays funny look fruit-cake looking
+			 monsters.",
+		capacity 1,
+		react_before [; 
+			Insert:
+				if(second == self)
+					"you really need a cartridge to
+					insert into the nintendo.";
+		],
+	has	scenery container open;
+
+Object -> mirror "closet"
+	with
+		name "mirror" "closet",
+		description [;
+			print "on closer inspection, these mirrors
+				are sliding doors for a closet.";
+			if(self has open) "  it is open.";
+			"";
+		],
+		capacity 5,
+	has	scenery container openable enterable;
+
+Object -> clothes "clothes",
+	with
+		name "clothes",
+		description
+			"these are your clothes.  they are nearly
+			 clean.",
+		before [;
+				Disrobe:style underline;
+					print "~mark twain once said `clothes
+					make the man.  naked people have
+					little or no influence upon
+					society.'~^";
+					style roman;
+					rtrue;
+			],
+	has	clothing pluralname;
+
+Object -> bed "bed"
+	with
+		name "bed",
+		description [n x pl;
+			print "your bed is typically a mess of
+				biblical proportions.  ";
+			n = pl = 0;
+			objectloop(x in bed) {
+				object_list --> (++n) = x;
+				if(x has pluralname) pl = 1;
+			}
+			if(n == 0) "there is nothing on the bed.";
+			print "on the bed ";
+			if(n == 1 && pl == 0) print "is "; else print "are ";
+			PrintObjectList(n);
+			rtrue;
+		],
+		capacity 4,
+		before [;
+				Make:	"naw, you can put off making the
+					bed until later.";
+				JumpOn: "you jump up and down on your bed,
+					making a fine mess of it.  you
+					enjoy yourself, but the feeling
+					soon passes and you get back down.";
+		],
+		after	[;
+				Enter:	"you lie on the bed.";
+			],
+	has	scenery supporter enterable;
+
+Object -> -> blanket "blanket"
+	with
+		name "blanket",
+		description
+			"this is your blanket.  it is yellow.";
+
+Object -> -> sheet "sheet"
+	with
+		name "sheet",
+		description
+			"this is the sheet from your bed.  it is white.";
+
+
+Object -> -> pillow "pillow"
+	with
+		name "pillow",
+		description [n x pl;
+			print "this is your pillow.  it is blue with white 
+			 seven-pointed stars on it.";
+			n = pl = 0;
+			objectloop(x in pillow) {
+				if(x ~= stars) {
+					object_list --> (n+1) = x; n++;
+					if(x has pluralname)
+						pl = 1;
+				}
+			}
+			if(n ~= 0) {
+				print "  inside the slip of the pillow ";
+				if(pl == 1 || n>1)
+					print "are ";
+				else
+					print "is ";
+				PrintObjectList(n);
+				rtrue;
+			}
+		],
+		after
+			[;	Take:	Achieved(1);
+					"you take the pillow.  the slip 
+					 makes a good container.";
+			],
+		capacity 10,
+	has	container open;
+
+Object -> -> -> stars "stars"
+	with
+		name "stars",
+		description [;
+			Achieved(2);
+			"each of the seven points on the stars represents
+			 one of the provinces in the colony.  you live
+			 in the second point on the left.";
+		],
+		before
+			[;	Take:	"you can't, they are sewn into the pillow.";
+			]
+	has	concealed pluralname;
+
+Object -> glass_door "sliding glass door"
+	with	name "sliding" "glass" "door",
+		description [;
+				if(self has open)
+					print "the sliding glass doors are open.  ";
+				else
+					print "the sliding glass doors are closed.  ";
+				print "through the transparent glass, you can see ";
+				if(location==bedroom) {
+					if(home_patio has light)
+						"you can see a patio
+						outside, and red sky.";
+					else
+						"it's pretty dark out
+						there.";
+				} else {
+					"your room.";
+				}
+			],
+		door_to
+			[;	if(location==bedroom) {
+					if(home_patio has light)
+						return home_patio;
+					"it's getting pretty late, it's
+					dark outside and you ought to be
+					getting to bed.";
+				}
+				return bedroom;
+			],
+		door_dir
+			[;	if(location==bedroom)
+					return s_to;
+				return n_to;
+			],
+		before [;
+			Open:	if(location==home_patio)
+					"it seems to be locked from inside.";
+		],
+		found_in	bedroom home_patio,
+	has	door openable scenery transparent;
+				
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	home_hallway
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object home_hallway "hall"	! nothing to see here, move along
+	with
+		name "hall",
+		description
+			"this is a plain hallway.  to the east is your
+			 bedroom.  to the south is the game room.  to the
+			 west is the computer room, and up the switch back
+			 stairs is the rest of the house.",
+		e_to	bedroom,
+		u_to	home_living_room,
+		w_to	home_computer_room,
+		s_to	home_game_room,
+	has	light;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	home_game_room
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object home_game_room "game room"
+	with
+		name "game room",
+		description
+			"this is the game room.  why it was called this
+			you are unsure.  the room is currently quite
+			bare, as mom and dad haven't decided what to do
+			with it.  there is a tv here.  there is a single exit to the 
+			north.",
+		n_to	home_hallway,
+	has	light;
+
+tv -> game_room_tv "tv"
+	with
+		name "tv" "television" "boobtube" "screen",
+		description
+			"this is a tv set.  it is of moderate size,
+			useful for watching tv programs on.";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	home_computer_room
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object home_computer_room "computer room"
+	with
+		name "computer room",
+		description
+			"this is where the computers in the house are
+			stored.",
+		e_to	home_hallway,
+	has	light;
+
+table -> deskx "desk"
+	with
+		name "desk",
+		found_in home_computer_room cave2,
+		description [;
+			print "this is a computer desk.  ";
+			self.print_list();
+		],
+		capacity 3,
+	has	supporter static;
+
+Object -> -> keyboardx "keyboard"
+	with
+		name "keyboard" "key",
+		description
+			"this keyboard has rows and rows of english
+			letters, along with some other crazy characters
+			you don't yet recognize.",
+		before	[;	!! FIXME !! increhensable!
+			PushButton: "the buttons on the keyboard look
+				inviting, but they are incromprehensable
+				you'd best consult the cpu directly.";
+		],
+	has	button static;
+
+Object -> -> monitor "monitor"
+	with
+		name "monitor" "screen",
+		description [;
+			if(monitor has on)
+				"the monitor is displaying several boxes
+				at the moment, as well as a pointer, and
+				some text.";
+		],
+		buttonf [;
+			if(monitor has on) {
+				<<SwitchOff self>>;
+			} else {
+				<<SwitchOn self>>;
+			}
+		],
+		after [;
+			SwitchOff:
+				if(parent(deskx) == cave2)
+					"dacky would probably prefer that
+					you not switch that off.";
+				if(parent(dad) == home_computer_room) {
+					give self on;
+					"dad switches the monitor back on angrily.";
+				}
+		],
+	has	switchable on static button light;
+
+Object -> -> cpu "cpu"
+	with
+		name "cpu" "computer",
+		description
+			"the cpu, or `thinking thingie' of the computer is
+			where all the work is done.  it has a microphone
+			built into it, so that you can give it commands.  
+			dad and dactyl prefer the keyboard for input and
+			they typically
+			mutters something dirty about a company in
+			redmond when the new interface is brought up.  still,
+			seeing as how you don't really know how to
+			read or write, the speaker interface is pretty
+			good.  the computer knows a lot about technology,
+			but not about the important things in life like
+			transformers and teenage ninja mutant turtles.",
+		items_looked1 0,
+		items_looked2 0,
+		mark [i ii;
+			self.items_looked1 = self.items_looked1 | i;
+			self.items_looked2 = self.items_looked2 | ii;
+			if(self.items_looked1 == $$111111111111111
+			&& self.items_looked2 == $$111111111111) {
+				self.items_looked1 = self.items_looked2 = 0; 
+				Achieved(10);
+				"congratulations.  you have somehow
+				managed to completely exhaust the cpu's
+				memory.  get a life slatery.";
+			}
+		],
+		lookup [a1 a2 a3;
+			print "*beep* *whiz* *beep* *beep*^";
+			switch(a1) {	!! FIXME !! lookup replicator, teleporter
+				'all' :
+					#ifdef DEBUG;
+					Achieved(10);
+					"handy having uncle fatty (debug) isn't it?";
+					#endif;
+					#ifndef DEBUG;
+					"unknown. *beep*";
+					#endif;
+				'technology' :
+					self.mark($$1);
+					"~method by which man
+					adapts his self or environment to
+					his advantage.  examples of
+					technology include cloaking
+					devices, replicators and
+					teleporters.~";
+				'cloaking', 'cloak' :
+					self.mark($$10);
+					"~a device which
+					renders its owner invisible.  
+					modern cloaks have features which
+					automatically turn themselves of
+					when dropped, so as to avoid being
+					lost.~";
+				'replicator', 'replicators' :
+					self.mark($$100);
+					"~device to produce something out
+					of thin air.  usually
+					pre-programmed at the factory for
+					something useful, like food.~";
+				'teleporters', 'teleport', 'transport',
+				'transporters' :
+					self.mark($$1000);
+					"~device to move its owner
+					somewhere else.  some older
+					models are a bit glitchy and
+					choose a random location.  this
+					can be quite hazardous.~";
+				'author', 'implementor', 'implementors',
+				'authors', 'richard', 'ess', 'creator',
+				'god' :
+					self.mark($$10000);
+					"~richard ess was born and grew
+					up in the mad mad world of lost
+					almost new mexico.  he has
+					authored such classic works as^
+					. `point three from average'^
+					. `veracity'^
+					. `one day in the life of robert cobber' (gise for short)^
+					. `god, intuition, sean and ed'^
+					. and of course, `uncle fatty'~";
+				'point' :
+					if(a2 == 'three' && a3 == 'from') {
+						self.mark($$100000);
+						"~an epic tragedy about a
+						psychotic man bent on revenge.~";
+					} else {
+						print "~unknown.~ *beep*";
+					}
+				'veracity' :
+					self.mark($$1000000);
+					"~story about the
+					mytho-historical john donovan
+					who lived through the dark ages
+					of computing.~";
+				'gise' :
+					self.mark($$10000000);
+					"~GISE is one of
+					the most passionate love
+					stories of the twentieth
+					century.~";
+				'one' :
+					if(a2 == 'day') {
+						self.mark($$100000000);
+						"~one day in the life of
+						robert cobbler is an
+						obvious rip off of the
+						classic one day in the
+						life of ivan d.~";
+					} else {
+						"~unknown.~ *beep*";
+					}
+				'robert', 'cobbler' :
+					self.mark($$1000000000);
+					"~programmer on old earth.~";
+				'uncle', 'fatty', 'pig', 'bacon', 'pork' :
+					self.mark($$10000000000);
+					"~small ground dwelling animal,
+					native to the planet earth.~";
+				'father', 'mother', 'dad', 'mom', 'pappa' :
+					self.mark($$100000000000);
+					"~object of class `parent'.~";
+				'mum' :
+					self.mark($$1000000000000);
+					"~female object of class `parent'
+					in the earth island republic of
+					australia.~";
+				'apple' :
+					self.mark($$10000000000000);
+					"~a type of fruit, native to the
+					planet earth.~";
+				'nla' :
+					self.mark($$100000000000000);
+					"~abbreviation for new los angeles.~";
+				'new' :
+					if(a2 == 'los' && a3 == 'angeles') {
+						self.mark(0, $$1);
+						"~colony established by
+						united earth government in order
+						to strengthen the
+						monetary value of an old
+						earth republic in north
+						america.~";
+					} else {
+						"~unknown.~ *beep*";
+					}
+				'school' :
+					self.mark(0, $$10);
+					"~place where the young learn
+					about the world, so they don't 
+					have to constantly consult
+					their family cpu.~";
+				'los', 'lost' :	
+					if(a2 == 'angeles') {
+						self.mark(0, $$100);
+						"~large city on the western
+						side of north america on
+						old earth.~";
+					} else if(a2 == 'alamos' or 'almost') {
+						self.mark(0, $$1000);
+						"~small town nestled in
+						the jemez mountains,
+						where the worlds first
+						nuclear weapons were 
+						developed.~";
+					} else {
+						"~unknown.~ *beep*";
+					}
+				'redoc' :
+					self.mark(0, $$10000);
+					"~information storage device originally
+					developed in the earth republic 
+					of germany, though most are
+					produced in japan today.  they
+					are illegal in the republic
+					of france, where they are 
+					paranoid of brain washers.  a
+					redoc is a `remembering
+					document.'  it uses a high
+					frequency laser to actually
+					burn the information into the
+					users brain, in such a way that
+					he or she shall never forget
+					it.  the redoc then usually
+					self destructs in order to
+					prevent	falling in to the wrong
+					hands.  modern redocs usually
+					enjoy a half dozen other
+					security features such as rsa
+					encryption and digital
+					signature checks.~";
+				'cryptography', 'cipher', 'rsa' :
+					self.mark(0, $$100000);
+					"~cryptography is a method of
+					hiding the meaning of a
+					message.  rsa is one such
+					popular method of encryption.~";
+				'earth' :
+					self.mark(0, $$1000000);
+					"~home planet to the human
+					race.~";
+				'hover', 'bus', 'car', 'hovercar', 'hoverbus':
+					self.mark(0, $$10000000);
+					"~vehicle which hovers above the
+					ground as it moves about.~";
+				'redmond', 'washington', 'dc' :
+					self.mark(0, $$100000000);
+					"~capital of the failed software
+					corporation `evil inc.'~";
+				'perl' :
+					self.mark(0, $$1000000000);
+					"~`any sufficiently advanced
+					technology is indistinguishable
+					from perl.'  -- lary wall.~";
+				'java' :
+					self.mark(0, $$10000000000);
+					"~an archaic object oriented
+					byte code computer language of
+					old earth.~";
+				'tv', 'fernseher', 'television', 
+				'tele' :
+					self.mark(0, $$100000000000);
+					"~tv is a method of broadcasting
+					moving pictures through thin air.~";
+				default : "unknown. *beep*";
+				}
+			],
+		life	[a1 a2 a3;
+				Ask:	wn = consult_from;
+					a1 = NextWord();
+					a2 = NextWord();
+					a3 = NextWord();
+					return self.lookup(a1, a2, a3);
+				Tell:	"*beep* *whiz* *beep* *beep*^
+					~that's a wonderful story~";
+				Answer: "*beep* *whiz* *beep* *beep*^
+					~this cpu made no query.~";
+
+			],
+		before [a1 a2 a3;
+			Consult:
+				wn = consult_from;
+				a1 = NextWord();
+				a2 = NextWord();
+				a3 = NextWord();
+				return self.lookup(a1, a2, a3);
+			],
+	has	static talkable;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	home_living_room
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object coin "gold coin",	! this is "hidden" in the sofa
+	with
+		name "gold coin" "coin" "gold",
+		description
+			"this tiny gold coin has the picture of an old
+			president or emperor from old earth.",
+		before	[;
+				Take: Achieved(5);
+			];
+
+Object home_living_room "living room",
+	with
+		name	"living room" "house",
+		description
+			"the living room is tidy and well decorated.
+			there are two huge photographs taken on earth on
+			the walls.  the room is also comfortable.  there
+			is a large couch in the shape of an L, poised in
+			an attack position around the 40 inch
+			tv set.  between the tv and the couch is a glass
+			coffee
+			table.  to the east is the kitchen.  to the south
+			is a door to mom and dad's room.  to the west is
+			a door to the garage, and to the north is the
+			front door.  the stairs downward return to the
+			lower level.",
+		d_to	home_hallway,
+		s_to	parents_room_door,
+		w_to	garage_room_door,
+		n_to	front_door,
+		e_to	home_kitchen,
+	has	light;
+
+photograph -> photograph1 "forest photograph"	!! FIXME !! araid ?
+	with	name "forest",
+		subject "a lush green earthen rain forest";
+
+photograph -> photograph2 "desert photograph"
+	with	name "desert",
+		subject "an araid sandy earthen desert";
+
+Object -> living_room_couch "couch"
+	with
+		name "couch" "sofa",
+		description "the sofa is plush and comfortable.  well
+				suited for watching tv shows on.",
+		before [;
+				Search:
+					if(coin hasnt general) { 
+						give coin general;
+						move coin to home_living_room;
+						"looking under and
+						between the
+						cushions, you discover a
+						gold coin";
+					} else {
+						"you already searched
+						there.";
+					}
+				Enter:
+					"as inviting as that sounds, you
+					have things to do.";
+			],
+		capacity 1,
+	has	scenery static supporter enterable;
+
+tv -> living_room_tv "tv"
+	with
+		name "tv" "television" "boobtube" "screen",
+		description
+			"it's huge.  it dwarfs nearly everything else in
+			the room.";
+
+table -> living_room_table "coffee table"
+	with
+		name "coffee table" "table",
+		description [;
+			print "the coffee table is glass.  making it
+				easy to see the floor underneath.  ";
+			self.print_list();
+		],
+		capacity 4,
+	has	transparent;
+
+Object -> parents_room_door "parent's room door"
+	with	name "door" "parents" "parents room door",
+		door_to
+			[;	if(location==home_living_room)
+					return home_parents_room;
+				return home_living_room;
+			],
+		door_dir
+			[;	if(location==home_living_room)
+					return s_to;
+				return n_to;
+			],
+		found_in	home_living_room home_parents_room,
+		before
+			[;
+				Open: "best that you not.";
+			],
+	has	door scenery openable proper;
+
+Object -> garage_room_door "door to garage"
+	with	name "door" "garage",
+		describe [;
+			if(self has open) "this door is open.";
+			"this door is closed.";
+		],
+		door_to
+			[;	if(location==home_living_room)
+					return home_garage;
+				return home_living_room;
+			],
+		door_dir
+			[;	if(location==home_living_room)
+					return w_to;
+				return e_to;
+			],
+		found_in	home_living_room home_garage,
+	has	door scenery openable;
+
+Object -> front_door "front door"
+	with	name "door" "front" "front door",
+		describe [; 
+			if(self has open) "the front door is open.";
+			"the front door is closed.";
+		],
+		door_to
+			[;	if(location==home_living_room) {
+					if(home_front_yard has light)
+						return home_front_yard;
+					"it's getting pretty late, it's
+					dark outside and you ought to be
+					getting to bed.";
+				}
+				return home_living_room;
+			],
+		door_dir
+			[;	if(location==home_living_room)
+					return n_to;
+				return s_to;
+			],
+		found_in	home_living_room home_front_yard,
+		before [;
+				Open:	if(location==home_front_yard)
+						"it appears to be
+						locked.";
+				Knock:	if(front_door hasnt open) {
+						if(random(2) == 1) {
+							print "mother
+							opens the door,
+							looking somewhat
+							bewildered.  ";
+							if(ego has invisible)
+								"seeing
+								nothing,
+								she
+								immediately
+								closes the 
+								door."; 
+							give front_door open;
+							"~oh there
+							you are.~ she says. she
+							then disappears into the
+							house, leaving the door
+							open.";
+						} else {
+							print "father
+							opens the door
+							gruffly.  ";
+							if(ego has invisible)
+								"seeing
+								nothing,
+								he
+								immediately
+								closes the 
+								door."; 
+							give front_door open;
+							"he says ~where
+							ya been?~ he then
+							disappears into the
+							house, leaving the door
+							open.";
+						}
+					}
+			],
+	has	door scenery openable;
+
+Object home_parents_room;	! this is just a place to hold parents
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	kitchen
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object home_kitchen "kitchen"
+	with
+		name "kitchen",
+		description
+			"this is the family kitchen.  you can return to
+			 the living room to the west, or visit the deck
+			 to the south.",
+		w_to	[x;
+				if(ego has invisible)
+					return home_living_room;
+				x = heaven;
+				if(parent(pillow) == ego) x = pillow;
+				if(parent(bowl) == ego or x
+				|| parent(cereal) == ego or x
+				|| parent(milk_jug) == ego or x
+				|| parent(oj_jug) == ego or x
+				|| parent(banana) == ego or x
+				|| parent(cbox) == ego or x) {
+					"your mother scowls at you for
+					even considering entering the 
+					living room with food."; 
+				}
+				return home_living_room;
+			],
+		s_to	home_top_deck,
+	has light;
+
+table -> kitchen_table "kitchen table"
+	with
+		name "kitchen table",
+		description [;
+			print "although it had to be imported from
+				earth, the wood in this kitchen table is
+				remarkably intact.  ";
+			self.print_list();
+		],
+		capacity 7,
+	has	~scenery;
+
+Object -> -> banana "banana"
+	with
+		name "banana" "fruit",
+		description
+			"this is a banana.  icky.",
+		before [;
+			Eat:	"actually, you don't like bananas all
+				that much.  maybe uncle fatty would like
+				it.";
+		],
+	has	edible;
+
+Object -> -> bowl "bowl"
+	with
+		name "bowl",
+		description [n x;
+			print "the bowl is white, and semi spherical.  ";
+			n = 0;
+			objectloop(x in bowl) {
+				object_list --> (n+1) = x;
+				n++;
+			}
+			if(n == 0) "it's empty.";
+			print "it contains ";
+			PrintObjectList(n);
+			rtrue;
+		],
+		capacity 2,
+		react_before [;
+			Insert:
+				if(second == self) {
+					if(noun ~= milk or orange_juice or cereal) {
+						"just put breakfast things in the
+						cereal bowl please.";
+					}
+					<<Pour noun second>>;
+					!move noun to second;
+					!rtrue;
+				}
+			Pour:
+				if(second == self &&
+				   (noun has liquid || noun == cereal)) {
+					move noun to bowl;
+					"you pour ", (the) noun, 
+					" into the bowl";
+				}
+		],
+	has	container open;
+
+Object -> -> milk_jug "glass jug"
+	with
+		name "jug" "glass",
+		description [;
+			if(parent(milk) == self) print "milk is contained within ";
+			"a graceful glass jug.";
+		],
+		react_before [;
+			Insert:
+				if(second == self)
+					"don't put that in there.";
+		],
+		capacity 1,
+	has	container open;
+
+liquidobj -> -> -> milk "milk"
+	with
+		name "milk" "liquid",
+		description
+			"it is a white liquid which comes from the breast
+			 of a female animal.  typically a cow, though
+			 they have been extinct for decades.";
+
+Object -> -> oj_jug "plastic jug"
+	with
+		name "jug" "plastic",
+		description [;
+			if(parent(orange_juice) == self) print "orange juice is contained within ";
+			"a green plastic jug.";
+		],
+		react_before[;
+			Insert:
+				if(second == self)
+					"don't put that in there.";
+		],
+		capacity 1,
+	has	container open;
+
+liquidobj -> -> -> orange_juice "orange juice"
+	with
+		name "orange" "juice" "liquid" "oj" "simpson",
+		description
+			"an orange liquid made by squeezing oranges.  
+			 however:
+			 here on the colony, most orange juice is 75%
+			 grape juice.";
+
+Object -> -> cbox "box"
+	with
+		name "box",
+		description
+			"this box has a comical purple hippo drawn on the
+			 front",
+		capacity 1,
+		react_before [;
+			Insert:
+				if(second == self)
+					"the cereal box is not a good
+					container for that";
+		],
+	has	container openable;
+
+Object -> -> -> cereal "cereal"
+	with
+		name "cereal",
+		description
+			"crunchy little barrel shaped objects
+			 mixed in with multi-colored marshmallows.",
+		before [;
+			Eat:	if(parent(self) == bowl) {
+					remove self;
+					print "munch munch.  ";
+					if(parent(milk) == bowl) {
+						remove milk;
+						print "slurp slurp.  ";
+					}
+					if(parent(orange_juice) == bowl) {
+						remove orange_juice;
+						print "aside from the
+							fact that the
+							orange juice
+							really didn't go
+							with the cereal, ";
+					}
+					ego.eaten = ego.eaten + 5;
+					Achieved(6);
+					print "you are now well satisfied.";
+					BlackGoals(BG_FEED_SELF);
+					rtrue;
+				} else {
+					"your table manners are terrible.  pour the
+					cereal into the bowl first.";
+				}
+		],
+	has	edible pluralname;
+
+parent -> mum "mother"
+	with	name "mum" "mom" "mother" "mugi",
+		description
+			"mother is a kindly woman.  she is always busy,
+			but managed to spend time being that important person 
+			`mom'.",
+		initial "mother is running about busily getting things done.",
+	life [;
+		ThrowAt, Attack:
+			"your mother is so kindly, the mere thought of violence is
+			impossible."; 
+		Kiss:	"mother smiles and says ~love you too dear.~";
+		WakeOther:
+			"your mother is wide awake (as usual).";
+		Show,Give:
+			if(noun == envelope) {
+				Achieved(7);
+				move envelope to self;
+				print "mother says ~why thank you~ and beams a 
+				pleasant smile in your general direction.";
+				BlackGoals(BG_DELIVER_MAIL);
+				rtrue;
+			}
+			"although your mother prizes all gifts you give her 
+			(even the ones that she throws away), that is of
+			very little use to her."; 
+		Tell, Answer:
+			"mother says ~that's a wonderful story~ while
+			beaming a pleasant smile in your general direction.";
+		Ask:	"mother thinks for a moment, but ends up answering
+			~i don't know.~";
+		Order:	"your mother is too busy to follow your instructions.";
+		Tease:	"you aren't exactly in to equal opportunity when
+			it comes to harassment.  try teasing dad
+			instead, it's funner.";
+	]
+	has female;
+
+parent -> dad "father"
+	with	counter 0,
+		name "dad" "father",
+		description [;
+			if(parent(self) == home_kitchen) {
+				"your father is casually reading through
+				the daily paper.  he seems so engrossed with 
+				the the paper that he is not aware 
+				of the world around him.";
+			} else if(parent(self) == home_computer_room) {
+				"dad is typing up a storm on the computer
+				keyboard.";
+			}
+			"this space for rent.";
+		],
+		initial [;
+			if(parent(self) == home_kitchen)
+				"dad is reading a newspaper at the kitchen table.";
+			"dad is using the computer.";
+		],
+	each_turn [; if(parent(self) == home_kitchen) StartDaemon(self); ],
+	daemon [;
+		self.counter++;
+		if(self.counter == 15) {
+			move self to home_computer_room;
+			move newspaper to kitchen_table;
+			give monitor on;
+			StopDaemon(self);
+			if(parent(ego) == home_kitchen)
+				"dad folds his newspaper up, stands up and 
+				leaves the kitchen to the west.";
+			if(parent(ego) == home_computer_room)
+				"dad enters the room from the east and
+				sits promptly in front of the computer.";
+		}
+	],
+	life [;
+		ThrowAt, Attack:
+			"violence is not the answer in this situation.";
+		Kiss:	"the thought of expressing your emotions to your 
+			father is an alien concept indeed.";
+		WakeOther:
+			"your father is already awake.";
+		Show,Give:
+			if(noun == envelope) {
+				Achieved(7);
+				move envelope to self;
+				print "dad nods in acknowledgement.";
+				BlackGoals(BG_DELIVER_MAIL);
+				rtrue;
+			}
+			rtrue;
+		Ask, Order, Tell, Answer:
+			print "dad says ~i dunno, ask your mother~, without 
+				even looking up from his ";
+			if(parent(self) == home_kitchen) {
+				"newspaper.";
+			} else {
+				"computer.";
+			}
+		Tease:	switch(random(4)) {	!! FIXME !! consider joke book
+				1: "~hey dad, how old were you when the
+				   dinosaurs became extinct?~";
+				2: "~dad... what was life like?  you
+				   know... before dirt.~";
+				3: "tease3";
+				4: "tease4";
+			}
+	];
+
+Object -> -> newspaper "newspaper",
+	with	name "news" "paper" "newspaper",
+		description "it contains a whole bunch of information on
+			the politics in nla.  too bad you can't read."; 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	top deck
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object broken_glass "broken glass"
+	with
+		name "broken" "glass" "jug",
+		description
+			"shards of broken glass.",
+		before [;
+			Take:	"better not pick up the broken glass, you
+				might cut yourself.";
+		];
+
+Object home_top_deck "top deck"
+	with
+		name "deck" "top",
+		description
+			"this is a raised deck attached to the side of the house,
+			floating in mid air (one might call it a hoverdeck).  
+			you may return to the kitchen by walking north.  although
+			you can't get there from here, you know the patio outside
+			your room is directly beneath.",
+		n_to	home_kitchen,
+		d_to	"it's a long drop.  maybe you should experiment with some
+			objects which won't feel the pain first.",
+	has light;
+
+Object -> hole "hole"
+	with
+		name "hole" "space" "empty",
+		description
+			"a small hole in the deck.",
+		initial "there is a small hole in the deck.",
+		react_before [;
+			Insert:
+				if(second == self) {
+					if(noun == milk_jug) {
+						remove milk_jug;
+						move broken_glass to home_patio;
+					} else {
+						move noun to home_patio;
+					}
+					"", (the) noun, " falls through the hole.";
+				}
+		],
+	has	container open;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	rear patio
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object home_patio "patio"
+	with
+		name "patio",
+		description
+			"wood planks make up the rear patio.  there is a
+			 plastic green garden to the west.  you can
+			 reenter your bedroom to the north.",
+		n_to	glass_door,
+		w_to	plastic_garden,
+		random_exit
+			[;
+				StrDirectionTo = "the west";
+				StrDirectionFrom = "the east";
+				return plastic_garden;
+			],
+	has	outside light;
+
+Object -> planks "planks"
+	with
+		name "planks" "wood" "plank",
+		description
+			"the wood is hard solid oak.",
+	has	scenery static pluralname;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	plastic garden
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object plastic_garden "plastic garden"
+	with
+		name "garden" "plastic",
+		description [;
+
+			if(self hasnt general) {
+				style underline;
+				print "~georgia o'keefe once said
+				`nobody sees a flower, really - it is so
+				small - we haven't the time, and it takes
+				time, like to have a friend takes
+				time.'~^^";
+				style roman;
+				give self general;
+			}
+
+			"this is the family garden.  you feel green
+			plastic grass underfoot. it crunches as you move
+			about.  there are several
+			flowers arranged around the square shaped plot of
+			plastic grass.  uncle fatty (your family pig)  
+			is in his pen here. you can hear him squeal.
+			the patio is to the east, and stairs lead up to the
+			northeast, to the front of the house.";
+		   ],
+		e_to	home_patio,
+		u_to	garden_stairs,
+		ne_to	garden_stairs,
+		random_exit
+			[x;
+				x = random(home_patio, home_front_yard);
+				if(x == home_patio) {
+					StrDirectionTo = "the east";
+					StrDirectionFrom = "the west";
+				} else {
+					StrDirectionTo = "upward";
+					StrDirectionFrom = "downward";
+				}
+				return x;
+			],
+	has	light outside;
+
+Object -> metal_rod "metal rod"
+	with
+		name "metal" "rod",
+		description
+			"a thin metal rod.  there is a plastic bumblebee 
+			at the end of it.",
+	has	concealed scenery transparent;
+
+Object -> -> plastic_bee "plastic bumblebee"
+	with
+		name "plastic" "bumblebee" "bee",
+		description
+			"the plastic bumblebee is striped yellow and
+			black. it hovers above the plastic flowers, in
+			defiance of gravity, by way of a small metal rod
+			protruding from the red dirt the flowers are
+			planted in.",
+		before [;
+			Take:	"nope.  leave it be(e).  it might sting
+				 you with a plastic stinger.";
+		],
+	has	concealed;
+
+Object -> garden_dirt "red dirt"
+	with
+		name "dirt" "dust",
+		description
+			"there is a small amount of red dirt the flowers
+			are planted in.",
+		before [;
+		],
+	has	static scenery;
+
+Object -> -> replicator_gadget "green pimply gadget"
+	with
+		name "replicator" "green" "gadget",
+		initial "there is a green pimply gadget here.",
+		color "green",
+		other_property "plastic pimples",
+		buttonf [x;
+			x = apple.create();
+			if(x == nothing)
+				"seems to be all out?";
+			move x to ego;
+			"an apple appears out of thin air right on the
+			 gadget.  amazing.";
+		],
+	class	gadget
+	has	concealed;
+
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+
+plastic_rose -> pink_rose "pink rose"
+	with	color "pink", name "pink" "rose";
+plastic_rose -> red_rose "red rose"
+	with	color "red", name "red" "rose";
+plastic_rose -> yellow_rose "yellow rose"
+	with	color "yellow", name "yellow" "rose";
+
+plastic_tulip -> ;
+plastic_tulip -> ;
+plastic_tulip -> ;
+plastic_tulip -> ;
+
+Object -> pen "uncle fatty's pen"
+	with
+		name "pen",
+		description
+			"this is uncle fatty's home.  his pig pen.",
+	has	container open scenery static;
+
+Object -> -> unclefatty "uncle fatty"
+	with
+		name "pig" "uncle" "fatty" "hog" "pork" "porky" "bacon" "swine",
+		description
+			"he's pink, big and has a pig snout.",
+		life [; Give:
+				if(noun has edible) {
+					if(ego has invisible)
+						print "the pig squeals in
+							astonishment at ", 
+							(a) noun,
+							" appearing from
+							no where.  
+							however ";
+					Achieved(4);
+					print "uncle fatty gobbles ", 
+					(the) noun, " up with a
+					snort.";
+					BlackGoals(BG_FEED_FATTY);
+					if(noun ofclass apple)
+						apple.destroy(noun);
+					else
+						remove noun;
+					rtrue;
+				}
+				"uncle fatty isn't much
+				interested in anything he can't
+				eat.";
+			Kiss: "uncle fatty is enjoying the attention, but
+				it isn't doing wonders for your breath.";
+			Tease:"~you old hunk of lard.~";
+		],
+		before [;
+			Examine:
+				if(self has general) {
+					style underline;
+					print "~he was a good pig~";
+					style roman;
+					"";
+				}
+				style underline;
+				print "~we of course had an animal and our
+				family loved the old pig.  he was so
+				loved that he became an honorary family
+				member.  everyone called him uncle fatty.  
+				everyone that is, except me.  i always
+				got stuck with the job of taking care of
+				the pig, which at best irritated me.  
+				mother knew how much i hated the pig, and
+				i think she understood, even better than
+				myself that it was something deeper than
+				the fact that i had to take care of the
+				animal.  there was perhaps a jealousy i
+				had for the animal which i never really
+				understood until quite recently.~";
+				style roman;
+				give self general;
+				"";
+		],
+	has	animate proper;
+
+grasshopper -> grasshopper1 "green grasshopper"
+	with	name "green",
+		color "green";
+
+Object -> garden_stairs "garden stairs"
+	with	name "stairs",
+		description
+			"the stairs are made from old magnetic blocks of
+			metal, from the old bullet trains which used to
+			criss cross the colony.",
+		door_to	[;	if(location==plastic_garden)
+					return home_front_yard;
+				return plastic_garden;
+			],
+		door_dir
+			[;	if(location==plastic_garden)
+					return u_to;
+				return d_to;
+			],
+		found_in	plastic_garden home_front_yard,
+	has	door scenery transparent pluralname open;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	shiny sector
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !! give point for entering
+Object shiny_sector "shiny sector"
+	with	name	"shiny" "sector",
+		description "this space for rent",
+		sw_to	home_front_yard,
+		random_exit [;
+			StrDirectionTo = "downward";
+			StrDirectionFrom = "upward";
+			return home_front_yard; 
+		],
+	has light outside;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	home_front_yard
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !! things like `enter home' and `enter house' should work in this
+         !! room.
+
+Object home_front_yard "front yard"
+	with	name "yard",
+		description
+			"this is the front yard of your home.  there is a
+			 plot of plastic grass, a
+			 driveway, three hovercar garage and a mailbox
+			 here.  the front door is here to the south, and
+			 stairs lead down around the house to the back
+			 yard.  there is a log cabin to the west, and a 
+			large hill to the northeast.",
+		random_exit [i; i =random(1,2,3,3);
+				switch(i) {
+					1: StrDirectionTo = "downward";
+					   StrDirectionFrom = "upward";
+					   return plastic_garden; 
+					2: StrDirectionTo = "the west";
+					   StrDirectionFrom = "the east";
+					   return log_cabin_room;
+					3: StrDirectionTo = "upward";
+					   StrDirectionFrom = "downward";
+					   return shiny_sector;
+				}
+			],
+		e_to	"there is a fence in that direction.",
+		d_to	garden_stairs,
+		sw_to	garden_stairs,
+		ne_to	"try as you might, the hill is too step to
+			climb",
+		u_to	"try as you might, the hill is too step to
+			climb",
+		w_to	log_cabin_room,
+		s_to	[;
+				if(front_door has open)
+					return front_door;
+				if(garage_door1 has open)
+					return garage_door1;
+				if(garage_door2 has open)
+					return garage_door2;
+				if(garage_door3 has open)
+					return garage_door3;
+				"i'm afraid all four doors in that
+				direction are closed.";
+			],
+	has	outside light;
+
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+
+Class garage_door 
+	with
+		description
+			"it's of fairly solid construction.",
+		door_to	[;	if(location==home_front_yard) {
+					if(home_front_yard has light)
+						return home_garage;
+					"it's getting pretty late, it's
+					dark outside and you ought to be
+					getting to bed.";
+				}
+				return home_front_yard;
+			],
+		door_dir
+			[;	if(location==home_front_yard)
+					return s_to;
+				return n_to;
+			],
+		before	[;
+				Open, Close:	if(location==home_front_yard)
+						"you can't from the outside.";
+			],
+		found_in	home_garage home_front_yard,
+		list_together	"garage doors",
+	has	door openable static proper;
+
+garage_door -> garage_door1 "garage door number one"
+	with	name "garage" "door" "one" "number";
+
+garage_door -> garage_door2 "garage door number two"
+	with	name "garage" "door" "two" "number";
+
+garage_door -> garage_door3 "garage door number three"
+	with	name "garage" "door" "three" "number";
+
+Object -> mailbox "mailbox"
+	with	name "mailbox" "box",
+		description
+			"this mailbox has the number 1417 etched into it.",
+		react_before [;
+			Insert:
+				if(second == self)
+					if(noun == envelope)
+						"you have acomplished
+						something by getting the
+						envelope, don't destroy
+						all that.";
+					else
+						"don't put that in there.";
+		],
+		capacity 1,
+	has	container openable scenery static;
+
+Object -> -> envelope "envelope"
+	with	name "envelope" "letter" "mail",
+		description
+			"this is an envelope addressed to you mom.",
+		before [;
+			Open:	"this envelope isn't addressed to you.";
+			Close:	"an envelope is one of those hard to
+				reseal items.";
+		],
+		react_before [;
+			if(action==##Insert
+			&& second==self)
+				"the envelope is not a good container for that.";
+		],
+	has	openable container;
+
+redoc -> -> -> rot_redoc "half used rot redoc" !! FIXME !! set color, preface and message !
+	with
+		name "rot" "redoc" "half" "used" "red",
+		ach 9,
+		color "rot",	!! FIXME !! buricratic?
+		preface "you hear a buricratic man say",
+		message "... and therefore, for your child's sake we
+			recommend that the animal be terminated in 
+			the most useful way possible.";
+		
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	log_cabin_room
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object log_cabin_room "log cabin"
+	with
+		first 0,
+		name "neighbor" "yard",
+		description [;
+			if(log_cabin_room.first == 0) {
+				style underline;
+				print "~one of our neighbors lived in a
+					god awful log cabin.  they didn't
+					bother to plant grass or even
+					keep an animal.  it was rather
+					disgusting and they well earned
+					the name of the outsiders on our
+					street.  they had (among other
+					children) a boy about my
+					age.~^^";
+				style roman;
+			}
+			log_cabin_room.first = 1;
+			"nothing much here, but weeds and an old cabin. 
+			to the east is your front yard and to the west is
+			the school bus stop.";
+		],
+		random_exit [;
+			if(random(1, 2) == 1) {
+				StrDirectionTo = "the east";
+				StrDirectionFrom = "the west";
+				return home_front_yard;
+			} else {
+				StrDirectionTo = "the west";
+				StrDirectionFrom = "the east";
+				return bus_stop;
+			}
+		],
+		e_to	home_front_yard,
+		w_to	bus_stop,
+	has light outside;
+
+Object -> log_cabin "log cabin"
+	with
+		name "cabin" "house" "home",
+		description
+			"the outsider's cabin is old and rickety."
+	has static scenery;
+
+parent -> -> kent_mum;		!! FIXME !!
+
+Object -> weeds "weeds"
+	with
+		name "weeds" "weed" "plants",
+		description
+			"the plants here (known as weeds) are growing out
+			of control."
+	has static scenery;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	bus stop
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object bus_stop "bus stop"
+	with	name "stop" "bus",
+		description "this here is where your school bus usually
+			picks you up.  there is a sign here which would
+			read `big red rock loop', if you could read.",
+		random_exit [;
+			StrDirectionTo = "the east";
+			StrDirectionFrom = "the west";
+			return log_cabin_room;
+		],
+		e_to	[;
+				if(self has general)
+					"the hoverbus is waiting for
+					you, don't go wondering off.";
+				return log_cabin_room;
+			],
+	has light outside;
+
+Object -> sign "street sign"
+	with
+		name "street" "sign",
+		description "it would say `big red rock loop', if you
+		could read.",
+	has	scenery;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	garage
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object home_garage "garage"
+	with	name "garage",
+		description
+			"here your family's three hovercars are kept.
+			there are three garage doors to the north, and a
+			door to the rest of the house to the east.",
+		e_to	garage_room_door,
+		n_to	[;
+				if(garage_door1 has open)
+					return garage_door1;
+				if(garage_door2 has open)
+					return garage_door2;
+				if(garage_door3 has open)
+					return garage_door3;
+				"your way is blocked by the closed garage
+				doors.";
+			],
+	has light;
+
+Class hover_car
+	with
+		before [;
+				Open:	"There are better ways to get
+					where you need to be going.  
+					besides, your only four and don't
+					know how to drive.";
+			],
+	has static openable;
+
+hover_car -> brown_car "brown hovercar"
+	with
+		name "brown" "hover" "car" "hovercar",
+		description
+			"the brown hovercar is an off roading vehicle.  it
+			has an extra two stabilizers to keep it floating
+			smoothly over big boulders and the like.";
+
+hover_car -> red_car "red hovercar"
+	with
+		name "red" "hover" "car" "hovercar",
+		description
+			"the red hovercar is a sports car.  it has
+			shapely fins protruding from the end, and
+			typically floats not more than a centimeter from
+			the ground when it's floating where it's going.";
+
+hover_car -> silver_car "silver hovercar"
+	with
+		name "silver" "hover" "car" "hovercar",
+		description
+			"the silver hovercar is a station wagon.  dad
+			doesn't like it, because he thinks it says ~i
+			want to have kids.~  ironic.  a little too moronic.";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	SCHOOL HOVERBUS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object bus_route "bus route"
+	with	description "your school hoverbus is taking you though its
+				normal route.",
+	has	light outside;
+
+Object bus "school hoverbus"
+	with	name "bus" "hover" "yellow" "hover" "hoverbus",
+		initial	"there is a hoverbus here waiting for you.",
+		description "this hoverbus is yellow, like most other
+				school class hoverbusses.",
+		inside_description
+			"you are inside the school hoverbus.",
+	has	enterable static container open;
+
+Object -> bus_seat "bus seat"
+	with	name "seat" "chair",
+		initial "you are sitting in your assigned seat.",
+		description "your seat.  assigned to you by the bus driver.",
+		before [;
+			LookUnder:	give rubber_band ~concealed;
+					"under your seat, you find a
+					ruber band.";
+		],
+		capacity 2,
+	has	static supporter;
+
+Object -> rubber_band "rubber band"
+	with	name "rubber" "band" "condom",
+		initial "there is a rubber band under your seat.",
+		description	"this is a handy dandy ruber band, useful
+				for launching at people you don't like.",
+		before [;
+			Launch:	if(second == kent) {
+					<<ThrowAt rubber_band kent>>;
+				} else {
+					if(second has female)
+						"that's not how you treat a lady";
+					"you don't really want to launch
+					the rubber band at ", (the) second, ".";
+				}
+				
+		],
+	has	concealed;
+
+Object -> bus_driver "bus driver"
+	with	name "driver" "bus",
+		mode 0,
+		counter 0,
+		daemon [;
+			if(self.mode == 0) {
+				if(parent(kent) == bus
+				&& parent(ego) == bus) {
+					move bus to bus_route;
+					print "^the bus driver starts the
+						hoverbus, and you and the
+						rest of the children on
+						board float into the wide
+						red yonder.^^";
+					style underline; 
+					print "~one day i went to school
+						on the hoverbus and the
+						outsider's young son was
+						riding with us.  everyone
+						was poking fun at him,
+						myself included. the
+						rather poorly done by
+						young boy went by the name
+						of josh and was a
+						lower-middle class child
+						maybe five years old at
+						the time.  about six
+						months older than
+						myself.~^^";
+					style roman;
+					PlayerTo(bus);
+					self.mode++;
+					StopDaemon(self);
+				}
+			}
+			if(self.mode == 1) {
+				if(self.counter++ == 3) {
+					print "the hoverbus driver brings
+						the hovering hulk to a
+						stop just outside your
+						school.  you and the rest
+						of the students make your
+						way to your class room.^";
+					MoveKids(classroom);
+					PlayerTo(classroom);
+					self.mode++;
+					phase++;
+					StopDaemon(self);
+					StartDaemon(houitzer);
+					#ifndef DEBUG;
+					deadflag = 2;
+					"^^this is as far as this
+					version of uncle fatty
+					(interactive) goes.  please get a
+					newer version.";
+					#endif;
+				}
+			}
+		],
+		life [;
+			Attack, ThrowAt:
+				if(parent(bus) == bus_route)
+					"not a good idea to attack the
+					bus driver whilst he is driving";
+				"the bus driver eyes you suspiciously and
+				you loos your nerve at the last second.";
+			Kiss:	"uh huh...";
+			WakeOther:
+				"i'm afraid the bus driver is very much
+				awake.";
+			Tease:	"say (loud enough for the driver to hear)
+				~hey man we're going one-legged-dog speed
+				now...~^^he turns around, giving you a
+				glance which makes the statement all
+				worthwhile.";
+			Give, Show:
+				if(parent(bus) == bus_route)
+					"the driver is too busy
+					driving.";
+				"the bus driver isn't interested in that.";
+			Tell, Ask, Answer:
+				if(parent(bus) == bus_route)
+					"~shut up and sit down kid.~";
+				"the bus driver looks only vaguely as
+				though he heard you.";
+		],
+	has	animate transparent;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	properties associated with all children in uncle fatty (interactive)
+!!
+!!	. any girl will intefear with woeing of another girl.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Constant NumKids 7;
+Array Kids --> monique zoe mary rolo splatery matt kent;
+
+[ MoveKids tolocation i;
+	for(i=0: i<NumKids: i++) {
+		move Kids --> i to tolocation;
+	}
+];
+
+[ StartKids i;
+	for(i=0: i<NumKids: i++) {
+		StartDaemon(Kids --> i);
+	}
+];
+
+#ifdef DEBUG;
+[ StopKids i;
+	for(i=0: i<NumKids: i++) {
+		StopDaemon(Kids --> i);
+	}
+];
+#endif;
+
+!! FIXME !!
+class kid class random_movement
+	with	! daemon from random_movement
+		getrandom [;
+			if(parent(self) == school) return random(3);
+			return random(20);
+		],
+		moveto [;	"^", (object) self, " walks off to ", 
+				(string) StrDirectionTo, "."; ],
+		movefrom [;	"^", (object) self, " mosies into view
+				from ", (string) StrDirectionFrom, "."; ],
+		stationary [; rtrue; ],
+		life [;
+			!! FIXME !!
+		],
+	has	animate transparent proper;
+
+Constant ScoreRating 10;	! points required to score with a female
+
+!! FIXME !! cooties, among other things.
+class girl class kid
+	with	rating 0,	! how do you rate with this particular
+				! female?
+		woe [ blarph i one;	! assumes girl is in current location
+			if(self == zoe
+			&& parent(rolo) == location)
+				"it difficult to woe zo@:e with rolo
+				present.";
+			for(i=0: i<NumKids: i++) {
+				one = Kids --> i;
+				if(one ~= self
+				&& one has female
+				&& parent(one) == location)
+					"it is difficult to woe with
+					multiple female units in the area.
+					wait until ", (object) one, " is
+					not present.";
+			}
+			if(blarph ~= 0)
+				self.rating = self.rating + blarph;
+			rfalse;
+		],
+		life [;
+			default:
+				return self.kid::life();
+		],
+	has	female;
+
+!! FIXME !!
+class boy class kid
+	with	life [;
+			Show :	if(noun == cooties) {
+					if(not(location ofclass yard))
+						"this is not a good place
+						for that.";
+					if(self == kent) {
+						Achieved(16);
+						PinkGoals(PG_KENT_HARASS);
+					}
+					move self to location.n_to();
+					"you scare ", (object) self,
+					" with your cooties.  he runs
+					off to the north.";
+				}
+				return self.kid::life();
+			Give:	if(noun == cooties) {
+					move cooties to self;
+					"you have successfully
+					transfered the cooties 
+					to ", (object) self, ".";
+				}
+				return self.kid::life();
+			default:
+				return self.kid::life();
+		],
+		before [;
+			Chase:	 <<Show second self>>;
+		],
+	has	male;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! 	MONIQUE JANNET FLYNN					(gen)
+!!
+!!	notes:
+!!		goal is to `score' with monique.  since you're only four this
+!!		amounts to `going steady'.  don't argue with me.
+!!		ways to score:
+!!			give flower
+!!			if(flower == dandelion)
+!!				tell monique about dandelion
+!!			give redoc	! the one where ego `thought' about her
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+girl -> monique "monique"
+	with	name "monique" "jannet" "flynn",
+		post_woe [;
+			if(self.rating == ScoreRating)
+				"^^monique stops and thinks for a second
+				and says ~gee, i think your swell.  do you want
+				to go steady?~";
+		],
+		life [ a1;
+			Answer, Tell:
+				wn = consult_from;
+				a1 = NextWord();
+				switch(a1) {
+					'yes', 'yep', 'y', 'sure' :
+						if(pink_goals | PG_MONIQUE_SCORE)
+							"you are already
+							`going steady.'";
+						if(self.rating < ScoreRating)
+							"~yes what?~";
+						PinkGoals(PG_MONIQUE_SCORE);
+						Achieved(17);
+						move cooties to ego;
+						"monique gives you a kiss on the
+						cheak.";
+				}
+				return self.girl::life();
+			Give:	if(noun == copy_redoc) {
+					"that would be incriminating, you
+					fool!";
+				}
+				if(noun == roserot_redoc) {
+					if(self.woe(1)) rtrue;
+					move noun to monique;
+					print "~oh, why thank you for returning
+						it to me!~  she says with a smile.";
+					self.post_woe();
+					"";
+				}
+				return self.girl::life();
+			default:
+				return self.girl::life();
+		];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	ZOE"							(ln)
+!!
+!!	notes:
+!!		once again, ego must `score' with zoe".  she doesn't like
+!!		dandelions, so the above dandelion trick will not work with
+!!		her, though she will like roses and tulips.
+!!		. impress with athletic ability
+!!		. tell -> `that's a wonderful story'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+girl -> zoe "zo@:e"
+	with	name "zoe" "zo@:e",
+		moveflag 0,
+		alsomove [ rfrom rto;
+			if(parent(rolo) == rfrom) {
+				move rolo to rto;
+				self.moveflag = 1;
+			} else {
+				self.moveflag = 0;
+			}
+		],
+		post_woe [;
+			if(self.rating == ScoreRating)
+				"^^zo@:e looks at your muscles and says
+				~my, your hot.  do you want
+				to go steady?~";
+		],
+		moveto [;
+			if(self.moveflag)
+				"^rolo and zo@:e walk off to ", 
+				(string) StrDirectionTo, ".";
+			self.girl::moveto();
+		],
+		movefrom [;
+			if(self.moveflag)
+				"^rolo and zo@:e mosie into view
+				from ", (string) StrDirectionFrom, ".";
+			self.girl::movefrom();
+		],
+		life [ a1;
+			Answer, Tell:
+				wn = consult_from;
+				a1 = NextWord();
+				switch(a1) {
+					'yes', 'yep', 'y', 'sure' :
+						if(pink_goals | PG_ZOE_SCORE)
+							"you are already
+							`going steady.'";
+						if(self.rating < ScoreRating)
+							"~yes what?~";
+						PinkGoals(PG_ZOE_SCORE);
+						Achieved(18);
+						move cooties to ego;
+						"zo@:e gives you a generous bear
+						hug.";
+				}
+				return self.girl::life();
+			default:
+				return self.girl::life();
+		];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	MARY							(noone)
+!!
+!!	notes:
+!!		mary is a distraction.  ego has no goals relative to her.
+!!		she does, however, even the balances between male and female.
+!!		there are now five boys (including ego) and only three girls.
+!!		still, this makes the goal of `score'ing with zoe" and monique
+!!		all the more impressive.
+!!
+!!		by the by- just noticed in all the movies about high school
+!!		popularity, there are exactly three ultra popular, (audience)
+!!		unlikable girls, with the bodies of a sizzling hot women in
+!!		their early 20s.  this is a good reason for making the female
+!!		population in this game 3.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+girl -> mary "mary"
+	with	name "mary";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	ROLO TOMASSI						(gue)
+!!
+!!	notes:
+!!		rolo likes zoe" (and zoe" has a slight interest in rolo).  he
+!!		will follow zoe" around, unless ego can get rid of him.  he
+!!		will intefear with ego's attempts to woe zoe".  rolo is afraid
+!!		of spiders.  rolo will use the technique of "thinking about it"
+!!		if ego does not choose him for his team.
+!!
+!!		if rolo, grasshopper, kent and ego are present then have
+!!		rolo feed the grasshopper to kent.  (do this only once)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+boy -> rolo "rolo"
+	with	name "rolo" "tomassi",
+		daemon [;
+			if(parent(self) ~= parent(zoe))
+				self.random_movement::daemon();
+		],
+		life [;
+			Show, Give :
+				if(noun == jar or spider
+				&& parent(spider) == jar) {
+					if(location == classroom)
+						"this is not a good place for
+						that.";
+					if(spider has general)
+						"~dude,~ rolo says, ~that
+						spider is dead.  thank god.~";
+					Achieved(13);
+					move self to
+						parent(self).move(
+						parent(self).x,
+						parent(self).y-2);
+					"the sight of the spider (even though
+					it is in the jar) is enough to frighten
+					rolo off.  he dissapears off into the
+					distance.";
+				}
+			default :
+				self.boy::life();
+		];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	SPLATERY						(slatery)
+!!
+!!	notes:
+!!		splatery is a walking dictionary.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+boy -> splatery "splatery"
+	with	name "splatery" "danny" "dan",
+		counter 0,
+		daemon [ room x1 y1;
+			if(self.counter++ % 7 ~= 4)
+				rtrue;
+			room = parent(self);
+			if(not(room provides x)
+			|| not(room provides y))
+				rtrue;
+			x1 = room.x;
+			y1 = room.y;
+			if( (x1 == 1 && odd(y1))
+			||  (x1 == 4 && even(y1)) ) {
+				move self to room.move(x1, y1-1);
+				if(location == room)
+					"^splatery walks off to the north.";
+				if(location == parent(self))
+					"^splatery walks into view from the
+					south.";
+				rtrue;
+			}
+			if(odd(y1)) {
+				move self to room.move(x1-1, y1);
+				if(location == room)
+					"^splatery walks off to the west.";
+				if(location == parent(self))
+					"^splatery walks into view from the
+					east.";
+				rtrue;
+			}
+			move self to room.move(x1+1, y1);
+			if(location == room)
+				"^splatery walks off to the east.";
+			if(location == parent(self))
+				"^splatery walks into view from the west.";
+			rtrue;
+		];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	MATT							(matt)
+!!
+!!	notes:
+!!		i think matt is a distraction, though he may have a darker
+!!		purpose.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+boy -> matt "matt"
+	with	name "matt" "mathew";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	JOSHUA KENT						(nathan)
+!!
+!!	notes:
+!!		afraid of worms.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+boy -> kent "joshua kent"	! don't forget to move to cabin later....
+	with	name "kent" "jashua",
+		mode 1,
+		initial "joshua kent is here.  you feel an overwhealming
+			urge to make his life miserable.",
+		counter 0,
+		daemon [x1 y1 room;
+			self.counter++;
+			if(self.mode == 1) {
+				if(self.counter == 4) {
+					move self to log_cabin_room;
+					if(location == log_cabin_room)
+						print "joshua kent exits
+							his log cabin.^";
+				} else if(self.counter == 6) {
+					move self to bus_stop;
+					if(location == log_cabin_room)
+						print "joshua kent moves
+							out of view to the
+							west.^";
+					if(location == bus_stop)
+						print "joshua kent comes
+							into view from
+							the east.^";
+				} else if(self.counter == 8) {
+					move self to bus;
+						print "joshua enter the
+							hoverbus.^";
+					self.mode = 2;
+					self.counter = 0;
+					StopDaemon(self);
+				}
+			}
+			if(self.mode == 2 &&
+			self.counter % 6 == 3) {
+				room = parent(self);
+				if(not(room provides x)
+				|| not(room provides y))
+					rtrue;
+				x1 = room.x;
+				y1 = room.y;
+				if( (x1 == 1 && even(y1))
+				||  (x1 == 4 && odd(y1)) ) {
+					move self to room.move(x1, y1+1);
+					if(location == room)
+						"^joshua kent walks off to the south.";
+					if(location == parent(self))
+						"^joshua kent walks into view from the
+						north.";
+					rtrue;
+				}
+				if(even(y1)) {
+					move self to room.move(x1-1, y1);
+					if(location == room)
+						"^joshua kent walks off to the west.";
+					if(location == parent(self))
+						"^joshua kent walks into view from the
+						east.";
+					rtrue;
+				}
+				move self to room.move(x1+1, y1);
+				if(location == room)
+					"^joshua kent walks off to the east.";
+				if(location == parent(self))
+					"^joshua kent walks into view from the west.";
+				rtrue;
+			}
+		],
+		state 0,
+		life [;		!! FIXME !! if this happens out of sequence the player gets stuck
+			ThrowAt:
+				if(noun == rubber_band) {
+					remove rubber_band;
+					StartDaemon(bus_driver);
+					Achieved(11);
+					"*thwap*^^you giggle
+					uncontrolably.  you can see him
+					convulse slightly, but he tries 
+					his best not to react.";
+				} else if(noun ofclass apple
+				|| noun == tainted_apple) {
+					move noun to location;
+					"*bam*^^the apple bounces off his
+					head.  it was probably painfull.";
+				} else if(noun == banana) {
+					remove banana;
+					"*splat*^^the banana explodes on
+					impact.  that was pretty funny.";
+				} else {
+					"you will have to think of
+					something else to do in order 
+					to make joshua kent miserable.";
+				}
+			Show, Give :
+				if(noun ofclass worm) {
+					!! FIXME !! chase kent past dog
+					Achieved(16);
+					PinkGoals(PG_KENT_HARASS);
+					"you chase joshua kent off with a
+					worm.";
+				}
+				self.boy::life();
+			default:
+				self.boy::life();
+		];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	PHASE 2 map
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Constant Phase2_rooms_num 32;
+Array Phase2_rooms --> 
+	field1		field2		diamond		tyre_room
+	flank1		blank2		fairy_circle	blank4
+	school		olib		blank7		cave_entrance
+	flank2		blank10		swing_room	gully1
+	blank11		blank12		slide_room	pit1
+	blank13		blank14		cc_room		dog_room
+	pit2		big_tree_room	small_tree_room	pit3
+	field3		field4		field5		gully2;
+
+Object MutPit "mud pit"
+	with	name "mud" "pit" "dirt" "wet",
+		found_in pit1 pit2 pit3,
+		before [;
+			Dig:	"other than making your hands very dirty,
+				you have acompilshed nothing.";
+		],
+	has	scenery;
+
+Object plastic_grass "plastic grass"
+	with
+		name "grass" "plastic",
+		description
+			"it is a nice alternative to the redness of the
+			rest of nla.",
+		before [;
+			Smell:	"it smells like model airplane cement.";
+			Listen:	"you'd like to believe you could hear
+				plastic crickets, but that's just your
+				imagination.";
+			Burn:	"assuming you did have a portable flame
+				handy, setting fire to the plastic grass
+				would be dangerous in addition to being
+				rather pointless.";
+			Touch:	"the grass feels perfectly normal.
+				normal for fake grass, that is.";
+			],
+		found_in [ i;
+			if(location == home_front_yard or plastic_garden)
+				rtrue;
+			for(i=0: i<Phase2_rooms_num: i++)
+				if(location == Phase2_rooms --> i)
+					rtrue;
+			rfalse;
+		],
+	has	scenery static;
+
+Object Fence "fence"
+	with
+		name "fence" "wall",
+		found_in home_front_yard field1 blank11 blank13 pit2 field3,
+		initial [;
+			if(location == home_front_yard)
+				"there is a tall fence to the east.";
+			"there is a tall fence to the west.";
+		],
+		description
+			"this is clearly a device for keeping adventurers in.",
+	has	static;
+
+Object SchoolOutside "school building"
+	with
+		name "school" "wall" "building",
+		found_in flank1 school flank2,
+		initial "you can see the entrance to your class room nearby.",
+		description "this is where you learn stuff and things.",
+		door_to	classroom,
+		door_dir [;
+			if(location.y == 2) return sw_obj;
+			if(location.y == 3) return w_obj;
+			if(location.y == 4) <<Go nw_obj>>;	!! someone want to
+								!! explain this to me?
+								!! FIXME
+		],
+	has	static door open;
+
+Object ImpassableMountains "impassable mountains",
+	with	name "mountain" "mountains" "hill" "Hills" "impassable",
+		initial "there are impassable mountains to the east.",
+		description "obviously a ploy to keep adventurers in.",
+		found_in tyre_room blank4 cave_entrance gully1 pit1 pit3 
+		gully2,
+	has	pluralname static;
+
+Array ADirectionsTo -->
+	"the northwest"		"the north"		"the northeast"
+	"the west"		"stationary"		"the east"
+	"the southwest"		"the south"		"the southeast";
+
+Array ADirectionsFrom -->
+	"the southeast"		"the south"		"the southwest"
+	"the east"		"stationary"		"the west"
+	"the northeast"		"the north"		"the northwest";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	playground
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Constant MAXX 4;
+Constant MAXY 8;
+
+class yard
+	with	x 0, y 0,
+
+		!! FIXME !! remove showlocation and description before release
+		showlocation [; print "[", self.x, ",", self.y, "]^"; ],
+		description [;
+			self.showlocation();
+			"this room, ", (object) self, " has not beed coded yet.";
+		],
+
+		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		!! anyone movement...
+		!! note that if you call move() with illegal coordinates, then
+		!! an ego-esq error message will be displayed, so make sure you
+		!! don't supply illegal coordinates from a nonplayer routine.
+		!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+		move [x y room blarph;
+			if(x==0 && y==2 or 4) "the outside of the school blocks your way.";
+			if(x==0 && y==3) return classroom;
+			if(x==0) "the path is blocked by a fence.";
+			if(x==5) "there are unpassable mountains in the way.";
+			if(y==9) y=1;
+			if(y==0) y=MAXY;
+			blarph = (x-1)+((y-1)*MAXX);
+			room = Phase2_rooms --> blarph;
+			return room;
+		],
+		n_to	[; return self.move(self.x,   self.y-1); ],
+		ne_to	[; return self.move(self.x+1, self.y-1); ],
+		e_to	[; return self.move(self.x+1, self.y);   ],
+		se_to	[; return self.move(self.x+1, self.y+1); ],
+		s_to	[; return self.move(self.x,   self.y+1); ],
+		sw_to	[; return self.move(self.x-1, self.y+1); ],
+		w_to	[; return self.move(self.x-1, self.y);   ],
+		nw_to	[; return self.move(self.x-1, self.y-1); ],
+		u_to	[; "you flap your arms as hard as you can,
+				but your feet remain firmly on the ground."; ],
+
+		!! nonego movement
+		get_room [x y blarph;
+			if(x==0) return 0;
+			if(x==5) return 0;
+			if(y==9) y = 1;
+			if(y==0) y = MAXY;
+			blarph = (x-1)+((y-1)*MAXX);
+			return Phase2_rooms --> blarph;
+		],
+		random_exit [x1 y1 r i blarph;
+			for(y1=self.y-1, i=0, blarph=0: y1<=self.y+1: y1++)
+				for(x1=self.x-1: x1<=self.x+1: x1++, blarph++) {
+					if(x1 ~= self.x || y1 ~= self.y) {
+						r = self.get_room(x1,y1);
+						if(r ~= 0) {
+							string_list --> i = blarph;
+							object_list --> (i++) = r;
+						} else {
+							! nothing
+						}
+					} else {
+						! nothing
+					}
+				}
+			r = random(i)-1;
+			blarph = string_list --> r;
+			StrDirectionTo = ADirectionsTo --> blarph;
+			StrDirectionFrom =  ADirectionsFrom --> blarph;
+			r = object_list --> r;
+			return r;
+		],
+
+	has	light outside;
+
+Class open_field class yard
+	with	description
+		[;
+			"this is an open field.  fake plastic grass extends
+			in all directions."; 
+		];
+
+Class pit_room class yard
+	with	description
+			"the fake plastic grass is interrupted here by a
+			muddy pit.";
+
+class gully_room class yard
+	with	description
+			"the elevation of the yard falls sharply here 
+			into a small gully.";
+
+class flank class yard
+	with	description [;
+			"the school yard, and the plastic grass which it is
+			made of, is interrupted here by the flanking side
+			of the school.  the building blocks your way to the
+			west, but you can see to the horizon in all other
+			directions.";
+		];
+
+!! FIXME !! microrapter
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	two OPEN FIELDs make out the outfield of the baseball diamond
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object field1 "open field" class open_field
+	with	x 1, y 1,
+		name "open" "field" "x1y1";
+
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+
+	!!also the starting location of all PHASE 2 insects
+
+fly -> fly1 "house fly" with name "house"; 
+fly -> fly2 "blow fly" with name "blow";
+
+grasshopper -> grasshopper2 "green grasshopper"
+	with	name "green",
+		color "green";
+
+grasshopper -> grasshopper3 "brown grasshopper" 
+	with	name "brown",
+		color "brown";
+
+grasshopper -> grasshopper4 "yellow grasshopper"
+	with	name "yellow",
+		color "yellow";
+
+grasshopper -> grasshopper5 "purple grasshopper"
+	with	name "purple",
+		color "purple";
+
+grasshopper -> grasshopper6 "chrome grasshopper"
+	with	name "chrome",
+		color "chrome";
+
+Object field2 "open field" class open_field
+	with	x 2, y 1,
+		name "open" "field" "x2y1";
+
+plastic_dandelion -> ;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	BASEBALL DIAMOND
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object diamond "baseball diamond" class yard
+	with	name "baseball" "diamond" "x3y1",
+		description [blarph;
+			print "the school baseball diamond is here, made
+				up of four bases, and a long out field
+				streatching off into the distance.";
+			objectloop(blarph in diamond) {
+				if(blarph ofclass base)
+					blarph.list();
+			}
+			"";
+		],
+		x 3, y 1;
+
+class base
+	with	description "just your standard baseball base.  players
+			stand on them.",
+		name "base",
+		before [;
+			Take, Steal:
+				<<Enter self>>;
+
+			Enter:	if(self provides prev
+				&& parent(ego) ~= self.prev)
+					"you can only get to ",
+					(object) self, " from ",
+					(object) self.prev, ".";
+		],
+		capacity 1,
+		list [;
+			if(child(self) == ego)
+				print "^^you are on ", (the) self, ".";
+			else if(child(self) ~= 0)
+				print "^^", (a) child(self), " is on ",
+					(object) self, ".";
+		],
+	has	scenery enterable supporter proper runtoable;
+
+base -> first_base "first base"
+	with	name "first" "1st", prev home_base;
+
+base -> second_base "second base"
+	with	name "second" "2nd", prev first_base;
+
+base -> third_base "third base"
+	with	name "third" "3rd", prev second_base;
+
+base -> home_base "home"
+	with	name "home";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	SCHOOL YARD TYRE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object tyre_room "school yard tyre" class yard
+	with	x 4, y 1,
+		name "yard" "x4y1",
+		description "the fake plastic grass is interupted by a
+			huge wheel which looks like it came from some
+			kind of digger.";
+
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+
+Object -> tyre "tyre"
+	with	name "tire" "tyre" "black" "rubber",
+		inside_description  [;
+			print "you are standing inside the tyre.";
+			if(parent(jar) == tyre)
+				"  there is a jar inside the tyre.";
+			"";
+		],
+		capacity 3,
+		description "this tyre seemes to have been stolen from an
+			enourmous yellow digging implement.  it is rubber
+			black.",
+		
+		before [;
+			Search:	if(parent(jar) == tyre)
+					"you find a jar in the tyre.";
+		],
+	has	scenery container open enterable;
+
+Object -> -> jar "jar"
+	with	name "jar" "glass" "lid",
+		capacity 3,
+		description [x n pl;
+			print "a glass jar with an attached (but openable)
+				lid.  it is ";
+			if(self has open) print "open"; else print "closed";
+			print ".  ";
+			if(self has general)
+				print "there is a small hole in the lid.  ";
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			n = 0;
+			objectloop(x in self) {
+				object_list --> (++n) = x;
+				if(x has pluralname) pl = 1;
+			}
+			if(n == 0) "the jar is empty.";
+			print "in the jar  ";
+			if(n==1 && pl==0) print "is "; else print "are ";
+			PrintObjectList(n);
+			"";
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		],
+		before [;
+			PunchHole:
+				if(self has general)
+					"there is already a hole in the jar's lid.";
+				if(second == 0)
+					"what do you want to punch a hole
+					in the jar's lid with?";
+				if(second ~= pencil)
+					"you can't punch a hole in the jar's
+					lid with that.";
+				give self general;
+				pencil.break();
+				move pencil to location;
+				if(location == classroom)
+					move pencil to ego_desk;
+				"you punch a hole in the jar's
+				lid.  unfortunately, the integrity of the
+				pencil has been compromized.  you disgard
+				the broken pencil.";
+		],
+		react_before [;
+			if(actor == ego
+			&& action == ##Insert
+			&& second == self
+			&& not(noun ofclass grasshopper)
+			&& not(noun ofclass fly)
+			&& noun ~= spider)
+				"the glass jar is not a good container for ",
+				(the) noun, ".";
+		],
+		initial "there is an empty glass jar in the tyre.",
+	has	container openable transparent;
+
+Object -> -> garbage "garbage"
+	with	name "garbage" "refuse" "rubbish" "food" "uneaten" "papers"
+			"paper",
+		initial "there is some garbage in the tyre.",
+		description
+			"a heap of uneaten food, papers and other rubbish.",
+		before [;
+			Take:	"you are not the school janitor.";
+		],
+	has	pluralname;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	NORTHERN FLANK
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object flank1 "school flank" class flank
+	with	x 1, y 2,
+		name "x1y2";
+
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+Object blank2 "blank2" class yard
+	with	x 2, y 2,
+		name "x2y2";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	FAIRY CIRCLE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+Object fairy_circle "fairy circle" class yard
+	with	x 3, y 2,
+		name "x3y2" "fairy" "circle";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+Object blank4 "blank4" class yard
+	with	x 4, y 2,
+		name "x4y2";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	OUTSIDE OF SCHOOL
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object school "school" class yard
+	with	x 1, y 3,
+		name "x1y3",
+		in_to classroom,
+		description [;
+			if(self hasnt general) {
+				style underline;
+				print "~at school we did the usual school sorts
+					of things and at recess, we again found
+					josh and managed to further make his
+					life miserable.  one has to wonder why
+					people, even children who `don't know
+					any better', would do such a thing to
+					another human being.  i do if no one
+					else does.~^^";
+				style roman;
+				give self general;
+			}
+			"this is where one enters your class room when
+			non recess time periods occur.  you feel no urge to
+			enter at the moment.  near the school entrance is
+			a brown spot, covering up the plastic grass where
+			students usually line up outside right before school
+			starts.";
+		];
+
+Object -> brown_spot "brown spot"
+	with	name "brown" "spot"
+	has	scenery;
+
+plastic_dandelion -> 
+	with	initial "there is a single solitary dandelion here.";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	SCHOOL LIBRARY
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object olib "outside library" class yard
+	with	x 2, y 3,
+		name "x2y3",
+		description "you are outside your school's library.
+			it's a round building, with an arching door.",
+		in_to	library_door;
+
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+
+Object library_door "library door"
+	with	name "library" "door" "lib",
+		description "just a door",
+		door_to ilib,
+		door_dir in_to,
+		found_in olib,
+	has	door open scenery;
+
+Object ilib "library"
+	with	name "library",
+		out_to olib,
+		description [;
+			print "you are inside the school library.  there
+			are shelves and shelves of books.  unfortunately,
+			you don't know how to read.  your school
+			librarian, mrs. librarian is present.";
+			if(self hasnt general) {
+				give self general;
+				"^^~hello hon.  if you want to check out
+				a book in redoc form, just let me know.~
+				she says with a smile.";
+			}
+			"";
+		],
+	has	light;
+
+Object -> shelves "shelves"
+	with	name "shelves" "shelf",
+		description "there are shelves and shelves of books
+			here.",
+	has	pluralname scenery supporter;
+
+Object -> -> books "books"
+	with	name "book" "books",
+		description 
+			"a dizzeying number of books are available in
+			your school library.  unfortunately, you are not
+			yet able to read.",
+		before [;
+			Take:	"there is really little point.  you don't
+				know how to read.";
+		],
+	has	pluralname scenery;
+
+Object -> librarian "mrs. librarian"
+	with	name "mrs" "librarian" "lib",
+		last 0,
+		description "by a strange querk of fate, mrs. librarian 
+			(who was married a number of years before she
+			became a librarian) became librarian for your
+			school.  she is mature, but not old. inteligent,
+			but not arogant.  overall, she is one of your
+			favorite teachers.",
+		life [ a1 ;
+			Kiss:	print "you like her, but not ";
+				style underline;
+				print "that";
+				style roman;
+				" much.";
+			Attack, ThrowAt:
+				"but she's so friendly!";
+			Show, Give:
+				"mrs. librarian smiles, but doesn't
+				seem interested.";
+			Ask, Tell, Answer:
+				wn = consult_from;
+				a1 = NextWord();
+				if(a1 == 'the') a1 = NextWord();
+				switch(a1) {
+					'point' :
+						"~oh yes.  `point three
+						from average'.  a
+						delightful, yet violent
+						short story by the
+						twentyfirst century short
+						story author richard ess.  
+						i believe it is available
+						at this library.~";
+					'veracity', 'unsoiled' :
+						"~`veracity'.  right.  i
+						think richard ess wrote
+						it.  the unsoiled remix
+						is the definitive
+						version.  we have it.~";
+					'one', 'day', 'life', 'robert', 
+					'rc1' : "~`one day in the life of
+						robert cobbler.'  we got
+						that one.~";
+					'rc2', 'gise', 'god', 'intuition',
+					'sean', 'ed' :
+						"~`gise' is richard ess'
+						only real love story.  i
+						think you're too young
+						for that.  we do have it
+						though.~";
+					'healer', 'healers',
+					'healer^s', 'curse' :
+						"~`the healers curse' is
+						an old legend.  no one
+						really knows who the real
+						author was.  i believe we
+						have a modern translation
+						at this library.~";
+					'man', 'snowy', 'river', 'banjo',
+					'andrew', 'barton', 'paterson' :
+						"~`the man from snowy
+						river' is a poem by the
+						australian poet and
+						reporter `banjo'
+						paterson.~";
+					default : "~i don't think we
+						have that book in redoc
+						format.~";
+				}
+		],
+		react_before [;
+			if(actor == ego
+			&& action == ##CheckOut or ##Take
+			&& noun provides libbook) {
+				if(self.last ~= 0
+				&& parent(self.last) ~= heaven)
+					"~records indicate that you
+					haven't read your last library
+					book yet.~";
+				if(parent(noun) == heaven)
+					"~records indicate that you
+					have already read that library
+					book.~";
+				self.last = noun;
+				move noun to ego;
+				"~sure thing hon, you can check that
+				out.~ mrs. librarian says with a friendly
+				smile, handing you a brun redoc.";
+			}
+		],
+		add_to_scope point_redoc veracity_redoc oneday_redoc
+				gise_redoc healers_redoc snowy_redoc,
+	has	animate proper female;
+
+Include "point";	! point three from average [ edited for tv version ]
+include "veracity";	! veracity [ edited for tv, unsoiled basis ]
+Include "oneday";	! rc1: one day in the life of robert cobbler (demo)
+Include "rc2";		! rc2: god, intuition, sean and ed (demo)
+Include "snowy";	! the man from snowy river by "banjo" paterson
+
+redoc -> -> healers_redoc "hellbrun `the healer's curse' redoc"
+	with	name "hellbrun" "brun" "healer^s" "healer" "healers"
+			"curse" "redoc" "hell",
+		color "hellbrun",
+		ach 19,
+		preface "you hear a friendly narrator say",
+		libbook 1,
+		messagef [;
+			print "^
+
+the healer's curse^^
+
+once apon a time, before cloaking devices were even invented there were
+towns seperated by vast distances.  law was typically determined by the
+sherif, who was well defined as whoever happened to be biggest
+physically.  there were a few hero's out there, and so when one of
+excelent stature entered the small principality of grom@:og, there was a
+minor celebration.  it was thought that perhaps he could lift the curse
+associated with and about the town.^^
+
+he spent most of the first week there emersing himself in the local
+culture, legends and tall tails.  he met a wizzard, as the wize were
+called in those days by the name of r@:udonden.  she told her about the
+legend of the healer's curse.  many years ago, a friend of the wize mage
+had wanted to learn the art of healing.  this was not an acceptable
+occupation for a woman in those days, but r@:udonden taught her anyway.^^
+
+after a few months, she was on her way to the capital city of uil to
+complete her training, but on the way she was attacked by a roving band
+of brigands.  they needed her services, as one of the terrorists had
+taken quite ill.  she did her best to save the mans life, but his ailment
+was too severe.  he died that night in the tender care of the healer.^^
+
+the brigands were not at all pleased with this and left her to die in the
+desert.  instead of dying, her spirit found new form.  that of a tree.
+the art of shapeshifting was a common course taken by healers in that
+day, but shape shifting is dangerous.  it an individual assumes a non
+human shape for too long then she is likely to forget that she was a
+human at all.  this is what happened to the cursed healer.^^
+
+r@:udonden suggested to the hero that he might be the one to lift the
+curse.  indeed the hero indicated his willingness to serve others and set
+out the next day with instructions from r@:udonden.^^
+
+he found the tree which had once been the healer and quietly listened for
+her spirit.  he could just barely make it out, but his own skills in the
+ways of shape shifting were well developed enough to sense that there was
+something left of the healer.^^";
+
+		print "
+
+he opened one sack he had carried dumped the soil it contained, for the
+first gift had to be one which a plant can gain strength.^^
+
+~i give thee this gift to show you that there are still people in the
+world who care for one another.  there are still people with the
+selflessness you have displayed in the past.~  the hero proclaimed.  he
+had to tell the healer this, because without the explenation, the act was
+meaningless.  and without the act, the statement was groundless.  the
+leaves in the tree began to rustle a little bit.^^
+
+next he opened a cantine and emptied water into the tree's roots.^^
+
+~i give thee this gift so that you may gain strength.~  the hero
+proclaimed.  he had to tell the healer this, because without the
+explenation, the act was meaningless.  and without the act, the statement
+was groundless.  the tall limbs of the short tree seemed to streatch to
+the sky just a little bit, like the long arms of a waking woman
+streatching her arms.^^
+
+next he hugged the tree.^^
+
+~i give the this gift of love, so that you may be reminded of what it is
+to be human, and to be reminded of the joys of being human.~ the hero
+proclaimed.  he had to tell the healer this, because without the
+explenation, the act was meaningless.  and without the act, the statement
+was groundless.  the tree rearanged itself again as if by magic.  this
+time, it seemed to display the friendly face of a woman.^^
+
+with that he left.  knowing it would be up to someone else to complete
+the restoration.  he had preformed a necessary component of the
+procedure though.  the hero went on to complete many important tasks, and
+saved many a person from faits worse than death.  in someways though,
+this first quest had been his most important, because he had learned an
+important lesson.^^
+
+motivation can be sensed, but seldom measured accurately.  neither a word
+of love, nor a loving action are alone adequate.  an action proves love,
+but only with the word to give it meaning.";
+		];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+Object blank7 "blank7" class yard
+	with	x 3, y 3,
+		name "x3y3";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	DAC CAVE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object cave_entrance "cave entrance" class yard
+	with	x 4, y 3,
+		description "to the east, etched into the mountain is a
+			dank, forboding cave.",
+		e_to cave_door,
+		in_to cave_door,
+		name "x4y3";
+
+plastic_dandelion -> ;
+
+Object cave_door "cave entrance"
+	with	name "cave" "entrance" "cavern",
+		description "just a cave",
+		door_to cave1,
+		door_dir in_to,
+		found_in cave_entrance,
+	has	door open scenery;
+
+class cave ;
+
+class tight
+	with	name "stalag" "tight" "stalagtight",
+		plural "stalagtights",
+		short_name "stalangtight",
+		description "there is a stalagtight hanging from the
+			ceiling of the cave.  it probably took thousands
+			of years to form.  or maybe it was replicated in
+			a few hours.  it's hard to tell fake from real
+			when it comes to caves today."
+	has	static;
+
+class might
+	with	name "stalag" "might" "stalagmight",
+		short_name "stalangmight",
+		plural "stalagmights",
+		description "pointing up toward the ceiling is a
+			stalagmight."
+	has	static;
+
+Object cave1 "dac cave" class cave
+	with	description "this is a poorly lit, slightly damp
+			cave.  despite the danger involved, you feel an
+			uverwhealming urge to explore further.  to the
+			west and out you can make out red daylight.  to
+			the north you can make out musky artifical
+			light, while there is a completely dark chamber
+			to the south.",
+		out_to	cave_entrance,
+		w_to	cave_entrance,
+		n_to	cave2,
+		s_to	cave3
+	has	light;
+
+tight -> ;
+tight -> ;
+tight -> ;
+tight -> ;
+tight -> ;
+might -> ;
+might -> ;
+
+Object cave2 "dac cave" class cave	!! note: deskx cpu monitor and keyboardx
+	with	description [;
+			print "this chamber belongs to the school's
+				computer scientist, white dactyl (or
+				dacky as his friends call him).  he is
+				currently present, in this chamber along
+				with his computer, affectionately refered
+				to as figment.  ";
+			if(heater1 has on
+			&& parent(heater1) == location
+			&& heater2 has on
+			&& parent(heater2) == location)
+				print "the room is dimly lit
+					by two heating units and a computer
+					monitor.";
+			else if((heater1 has on && parent(heater1) == location)
+			|| (heater2 has on && parent(heater2) == location))
+				print "a single heating unit and a
+					monitor give cast dancing shadows
+					on the cave walls.";
+			else
+				print "you can see dactyl's face in the
+					dim monitor light.";
+			print "  you can faintly make out daylight to the
+				south.";
+
+			if(self hasnt general) {
+				give self general;
+				"^^dactyl notes your entry with a nod.";
+			}
+			"";
+		],
+		s_to cave1;
+
+Object -> dacky "dactyl"	!! FIXME !!
+	with	name "white" "dactyl" "dacky" "dac",
+		describe "^the legendary ace programmer and computer
+			scientist white dactyl is here.",
+	has	animate male proper;
+
+
+class heater		!! FIXME !! make pushable...
+	with	name "heater",
+		plural "heaters",
+		description "intended to heat the damp cavern during the
+			harsh nla winter, the device has a side effect of
+			providing faint lighting.",
+		before [ blarph;
+			Take : "it's much to heavy to pick up.  you
+				might be able to push it.";
+			PushDir, Push :
+				if(second == 0)
+					"which direction would you like
+					to push it?";
+				blarph = 0;
+				switch(second) {
+					n_obj : blarph = location.n_to;
+					s_obj : blarph = location.s_to;
+					e_obj : blarph = location.e_to;
+					w_obj : blarph = location.w_to;
+				}
+				if(blarph == 0)
+					"cave rock blocks that route.";
+				if(blarph ofclass yard)
+					"there is no reason to take it
+					outside.  you have daylight there.";
+				move self to blarph;
+				"it requires a bit of effort, but you
+				manage it.";
+		],
+		after [;
+			SwitchOn : give self light;
+			SwitchOff : give self ~light;
+		],
+	has	light switchable on;
+
+heater -> heater1 "chrome heater" with name "chrome";
+heater -> heater2 "bronze heater" with name "bronze";
+
+might -> ;
+might -> ;
+might -> ;
+might -> ;
+tight -> ;
+tight -> ;
+
+!! FIXME !!
+Object cave3 "dac cave" class cave
+	with	description "another chamber of the caverns.  there is
+			a passage to the north.",
+		n_to cave1;
+
+might -> ;
+tight -> ;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	SOUTHERN FLANK
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object flank2 "school flank" class flank
+	with	x 1, y 4,
+		name "x1y4";
+
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+Object blank10 "blank10" class yard
+	with	x 2, y 4,
+		name "x2y4";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	SWINGS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+Object swing_room "school yard swing" class yard
+	with	x 3, y 4,
+		name "x3y4";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	GULLY
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object gully1 "gully" class gully_room
+	with	x 4, y 4,
+		name "x4y4";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+Object blank11 "blank11" class yard
+	with	x 1, y 5,
+		name "x1y5";
+
+Object blank12 "blank12" class yard
+	with	x 2, y 5,
+		name "x2y5";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	SCHOOL YARD SLIDE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object slide_room "school yard slide" class yard
+	with	x 3, y 5,
+		name "x3y5",
+		u_to	[; <<Climb slide>>; ],
+		d_to	[; rtrue; ],
+		description [;
+			print "fake plastic grass extends in all directions.  ";
+			return slide.print_contents();
+		];
+
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+plastic_dandelion -> ;
+
+Object -> slide "slide"
+	with	name "slide" "slipry" "dip",
+		description "the slipry dip (ie. slide) is designed for 
+				amusment of the very young.",
+		inside_description "you are standing atop the tall slide,
+				able to see the playground streatch off
+				into all directions.",
+		print_contents [;
+			print "a rusty old slide extends into the
+				stratosphere.  hangling between the tall
+				struts of the slide is a spider's web.  ";
+			return spider_web.print_contents();
+		],
+		before [;
+			Enter:	move player to slide;
+				"you climb to the top of the slide.";
+			Climb:	<<Enter slide>>;
+			ClimbDown:
+				move player to slide_room;
+				"you climb down the slide ladder.  somehow
+				you feel unfulfilled.";
+			Go:	if(noun == d_obj) {
+					<<Exit>>;
+				}
+		],
+		react_before [;
+
+			!! put something on the slide
+			if(actor == ego
+			&& action == ##PutOn) {
+				"you will not need to put ", (the) noun, "
+				on the slide.";
+			}
+
+			!! slide off
+			if(actor == ego
+			&& action == ##Slide) {
+				if(noun == 0 || noun == self) {
+					if(parent(ego) == slide) {
+						<<Go d_obj>>;
+					} else {
+						"first climb up the slide.";
+					}
+				}
+			}
+
+			!! exit slide
+			if(actor == ego
+			&& action == ##Exit
+			&& parent(ego) == slide) {
+				move ego to slide_room;
+				"you slide down.  wheee.";
+			}
+		],
+	has	supporter scenery enterable;
+
+Object -> -> spider_web "spider's web"
+	with	name "web",
+		description "a sticky spider's web.",
+		react_before [; 
+			Insert:
+				if(second == self) "don't stick that in there.";
+		],
+		print_contents [n x pl;
+			objectloop(x in self) {
+				object_list --> (++n) = x;
+				if(x has pluralname) pl = 1;
+			}
+			if(n == 0) "there is nothing in the spider's web.";
+			print "in the spider's web ";
+			if(n==1 && pl==0) print "is "; else print "are ";
+			PrintObjectList(n);
+			"";
+		],
+		daemon [x r;
+			r = random(10);
+			objectloop(x in slide_room) {
+				if(x ofclass fly && r == 3) {
+					move x to spider_web;
+					StopDaemon(x);
+					if(location == slide_room)
+						"", (a) x, " is snared by the spider's web.";
+					rtrue;
+				}
+			}
+		],
+	has	container scenery open;
+
+Object -> -> -> spider "spider" class captureable
+	with	name "spider" "aracnid" "bl_spider",	! that's blarph spider, in case your wondering
+		escape [;
+			move self to spider_web;
+			if(location == slide_room
+			&& parent(jar) == ego)
+				"the spider manages to esape from your jar
+				and returns to her web.";
+			if(parent(jar) == ego)
+				"the spider escapes from your jar.";
+			rtrue;
+		],
+		description [;
+			print "this appears to be a ";
+			if(self has general)
+				print "dead ";
+			"venimus eight legged animal";
+		],
+		describe [; if(parent(self)==spider_web) rtrue; ],
+		daemon [x r;
+			if(parent(self) == jar) self.check_oxygen();
+			r = random(10);
+			if(r == 2) objectloop(x in parent(self)) {
+				if(x ofclass fly
+				|| x ofclass grasshopper) {
+					move x to hell;
+					if(parent(self) == spider_web
+					&& location == slide_room)
+						"the spider consumes ", (a) x, 
+						" in her web.";
+					if(parent(parent(self)) == ego)
+						"the spider in ", (the) parent(self),
+						" consumes ", (a) x, ".";
+				}
+			}
+		],
+	has	animate female;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	MUD PIT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object pit1 "mud pit" class pit_room
+	with	x 4, y 5,
+		name "x4y5";
+
+worm -> worm1 "earth worm";
+worm -> worm2 "earth worm";
+worm -> worm3 "earth worm";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+Object blank13 "blank13" class yard
+	with	x 1, y 6,
+		name "x1y6";
+
+Object blank14 "blank14" class yard
+	with	x 2, y 6,
+		name "x2y6";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	CONCRETE CYLINDER
+!!
+!!	this may be a good place to hide when recess is called in...
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+Object cc_room "concrete cylinder" class yard
+	with	x 3, y 6,
+		name "x3y6";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	DOG ROOM
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !!
+
+Object dog_room "dog" class yard
+	with	x 4, y 6,
+		name "x4y6",
+		description "to the east, you can make out the industrial
+			liquid sector.  blocking your way to liquid sector
+			is a mean looking dog.",
+		e_to [;
+			if(ego has invisible) {
+				print "while you are invisible, you are able
+					to slip by the dog undetected.^";
+				Achieved(14);
+				return liquid_sector;
+			}
+			<<Attack dog>>;
+		];
+
+Object -> dog "dog"
+	with	name "dog" "mean" "bulldog" "psycho" "psychotic",
+		life [; "the dog yapps an agressive warning."; ],
+	has	animate scenery;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	MUD PIT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object pit2 "mud pit" class pit_room
+	with	x 1, y 7,
+		name "x1y7";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	TREE ROOMs
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object big_tree "big tree"
+	with	name "big" "tree" "bark",
+		found_in big_tree_room up_tree,
+		description "a tall tree with large branches.",
+		before [;
+			Climb : if(location == up_tree)
+					"you are already up the tree.";
+				PlayerTo(up_tree);
+			ClimbDown :
+				if(location == big_tree_room)
+					"you are not up the tree.";
+				PlayerTo(big_tree_room);
+		],
+	has	scenery;
+
+Object big_tree_room "big tree" class yard
+	with	x 2, y 7,
+		name "x2y7",
+		description "the plastic grass in this region is interrupted
+			by a tall tree with large branches.",
+		u_to up_tree;
+
+plastic_dandelion -> ;
+
+Object small_tree_room "small tree" class yard
+	with	x 3, y 7,
+		name "x3y7",
+		description "the plastic grass in this region is interrupted
+			by a small tree with unreachable branches.";
+
+plastic_dandelion -> ;
+
+Object -> small_tree
+	with	name "small" "tree" "bark",
+		before [;
+			Climb:	"the branches are unreachable, making the
+				tree impossible to climb without further
+				equipment.";
+			ClimbDown :
+				"you are not up the tree.";
+		],
+	has	scenery;
+
+Object up_tree "up a tree"
+	with	d_to big_tree_room,
+		u_to "this is as far up the tree as you can climb.",
+		description [;
+			print "you have managed to climb up a tree.  you can see
+				the school playground in all directions.  on a
+				nearby branch, you can see a bird's nest.  ";
+			nest.describe_inside();
+			"";
+		],
+	has	light;
+
+Object -> nest "nest"
+	with	name "nest" "twigs",
+		describe_inside [n x pl binn;
+			objectloop(x in self) {
+				if(x == bird) 
+					binn = 1;
+				else {
+					object_list --> (++n) = x; 
+					if(x has pluralname) pl = 1;
+				}
+			}
+			if(binn && n == 0)
+				"other than the crow, there is nothing
+				in the nest.";
+			if(binn) print "the crow is currently at home in her nest.  ";
+			if(n == 0) "there is nothing in the nest.";
+			print "inside the nest ";
+			if(n == 1 && pl == 0) print "is "; else print "are ";
+			PrintObjectList(n);
+		],
+		description [;
+			print "a small birds nest is made up of twigs.";
+			self.describe_inside();
+			"";
+		],
+		before [;
+			Take:	"don't take the bird's nest.  that is
+				the bird's home!";
+		],
+		react_before [;
+			if(actor == ego
+			&& action == ##Insert
+			&& second == self)
+				"it is best that you not put ", (the) noun,
+				"in the bird's nest.";
+			if(actor == ego
+			&& action == ##Drop) {
+				move noun to big_tree_room;
+				"", (the) noun, " falls to the ground.";
+			}
+		],
+	has	container open scenery;
+
+Object -> -> cloaking_gadget "blue antenna gadget"
+	with
+		name "cloak" "blue" "gadget",
+		color "blue",
+		other_property "an antenna",
+		buttonf [;
+			if(ego has invisible) {
+				give ego ~invisible;
+				"your are now visible.";
+			}
+			give ego invisible;
+			"the gadget renders you invisible.";
+		],
+		after	[;
+			Drop, Insert:
+				if(ego has invisible) {
+					give ego ~invisible;
+					"you are now visible.";
+				}
+		],
+	class	gadget;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	CROW
+!!
+!!	the crow is our playgrounds garbage collector.  it scowers the
+!!	playground (randomly) for items the player has dropped and returns them
+!!	to her nest.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !! movement needs testing
+
+Object -> -> bird "crow" class random_movement	! (general means head home)
+	with	name "black" "bird" "birdie" "crow",
+		getrandom [; return random(5); ],
+		moveto [;	"^the crow flies off to ", 
+				(string) StrDirectionTo, "."; ],
+		movefrom [;	"^a crow flies into view from ",
+				(string) StrDirectionFrom, "."; ],
+		react_before [;
+			if(action == ##Take
+			&& parent(noun) == nest)
+				"the crow is intent on defending her nest
+				with her life.  or yours, if necessary.";
+		],
+		lastroom 0,
+		daemon [blarph fred;
+			if(parent(self) == nest) {
+
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+				! deposite any items held in nest
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+				objectloop(blarph in self) {
+					move blarph to nest;
+				}
+				give self ~general;
+
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+				! bird takes off
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+				if(random(5) == 1) {
+					move self to big_tree_room;
+					self.lastroom = up_tree;
+					if(location == up_tree)
+						"the crow takes off and leaves
+						her nest.";
+					if(location == big_tree_room)
+						"a crow flies down from the
+						tall tree above.";
+				}
+				rtrue;
+			}
+
+			if(parent(self) == big_tree_room) {
+
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+				!! return to nest
+				!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+				if(self.lastroom ~= up_tree) {
+					if(random(5) ~= 1) rtrue;
+					move self to nest;
+					self.lastroom = big_tree_room;
+					if(location == big_tree_room)
+						"a crow flies up into the
+						tall tree above.";
+					if(location == up_tree)
+						"a crow lands in her nest.";
+					rtrue;
+				}
+
+			}
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			!! scoop up any items ego has left lying around
+			!! eat any worms presant
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			objectloop(blarph in parent(self)) {
+				if(blarph ofclass worm) {
+					move blarph to hell;
+					if(location == parent(self))
+						"the black crow swoops down,
+						grabbing a worm in her
+						strong beak.";
+					rtrue;
+				}
+				if(blarph has moved) {
+					move blarph to bird;
+					give self general;
+					if(location == parent(self))
+						"the black crow swoops down,
+						grabbing ", (the) blarph, " in 
+						her strong beak.";
+					rtrue;
+				}
+			}
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			!! go home
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			if(self has general) {
+				blarph = parent(self);
+				if(not(blarph provides x)
+				|| not(blarph provides y)) {
+					"error, ", (object) blarph, "does
+					not provide x or y.";
+				}
+				if(blarph.x == 1) {
+					fred = blarph.move(blarph.x+1, blarph.y);
+					move self to fred;
+					if(location == blarph)
+						"the crow flies off to the east";
+					if(location == fred)
+						"a crow flies into view from
+						the west.";
+					rtrue;
+				}
+				if(blarph.x > 2) {
+					fred = blarph.move(blarph.x-1, blarph.y);
+					move self to fred;
+					if(location == blarph)
+						"the crow flies off to the west";
+					if(location == fred)
+						"a crow flies into view from
+						the east.";
+					rtrue;
+				}
+				if(2 < blarph.y
+				&& blarph.y < 7) {
+					fred = blarph.move(blarph.x, blarph.y+1);
+					move self to fred;
+					if(location == blarph)
+						"the crow flies off to the south";
+					if(location == fred)
+						"a crow flies into view from
+						the north.";
+					rtrue;
+				}
+				fred = blarph.move(blarph.x, blarph.y-1);
+				move self to fred;
+				if(location == blarph)
+					"the crow flies off to the north";
+				if(location == fred)
+					"a crow flies into view from
+					the west.";
+				rtrue;
+			}
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			!! go random
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			self.random_movement::daemon();
+
+		],
+		life [;
+			Attack, ThrowAt:
+				"try as you might, the crow dodges your attack
+				with the ease of a talented fighter pilot.  she
+				squawks a laugh at your inability to do her
+				harm.";
+			Kiss:	"the crow is out of reach.";
+			WakeOther:
+				"the crow is quite awake.";
+			Give, Show:
+				"the crow seems uninterested in anything you
+				are actually holding, seeing as how you are
+				likely using any such objects as bait.";
+			Ask, Tell, Answer, Tease:
+				"the crow seems inteligent, but it doesn't
+				understand english.";
+		],
+	has	animate female;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	MUD PIT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object pit3 "mud pit" class pit_room
+	with	x 4, y 7,
+		name "x4y7";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	three OPEN FIELDs make out the outfield of the baseball diamond
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object field3 "open field" class open_field
+	with	x 1, y 8,
+		name "x1y8";
+
+Object field4 "open field" class open_field
+	with	x 2, y 8,
+		name "x2y8";
+
+Object field5 "open field" class open_field
+	with	x 3, y 8,
+		name "x3y8";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	another GULLY
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object gully2 "gully" class gully_room
+	with	x 4, y 8,
+		name "x4y8";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	class room
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object classroom "class room"
+	with	name "class" "school" "room",
+		description "this is the school class room.  in one corner
+			of the room is the colony flag.  on the walls are
+			various pictures.  you are
+			sitting at your desk.  there is an exit leading
+			outside to the west.",
+		e_to	school,
+	has	light;
+
+photograph -> photograph3 "pig photograph"
+	with	name "pig" "piglet" "hog",
+		length 5, height 5,
+		subject "a healthy pig being fed by a young nla citizen.";
+
+photograph -> photograph4 "ant photograph"
+	with	name "ant" "insect";
+
+photograph -> photograph5 "cattle photograph"
+	with	name "cow" "bovine" "cattle",
+		length 4, height 4,
+		subject "various cattle being hearded into a small wooden
+			enclosure.";
+
+photograph -> photograph6 "spider photograph"
+	with	name "spider" "aracnid",
+		length 3, height 4,
+		subject "a venimus spider making a sticky web.";
+
+photograph -> photograph7 "earth worm photograph"
+	with	name "worm" "earth" "earthworm",
+		length 2, height 2,
+		subject "a long earth worm, making his way back
+			into warm moist soil.";
+
+Object -> ego_desk "desk" class table
+	with	name "desk",
+		article "your",
+		short_name "desk",
+		capacity 3,
+	has	scenery;
+
+Object -> -> pencil "pencil"
+	with	name "pencil" "led",
+		short_name "pencil",
+		break [;
+			give self general;
+			self.short_name = "broken pencil";
+		],
+		before [;
+			Take:	if(self has general)
+					"you have no need for a broken pencil.";
+		];
+
+redoc -> -> gelb_redoc "gelb redoc"
+	with
+		name "gelb" "redoc" "yellow",
+		ach 12 ,
+		color "gelb",
+		preface "you hear a government narrator sing",
+		message "^a debate raged through congress
+			^it seemed and endless fight
+			^till the speaker called for recess
+			^*reeeeeecesss*!
+			^it's time to hover home and feed the animals!^
+
+			^welcome to today's edition of government education!
+			today we're going to learn more about good ways to
+			preserve animal life in and about new los angales
+			colony.  first lesson worth learning is that certain
+			animals are better to keep than others.  for example,
+			pigs are usually considered excelant animals to
+			keep, while there is little to no point in keeping
+			grasshoppers, since they are pretty good at taking
+			care of themselves."; 
+
+redoc -> roserot_redoc "original roserot redoc"
+	with	name "roserot" "redoc" "pink" "original",
+		color "roserot",
+		ach 15,
+		preface "you hear monique say",
+		describe [; 
+			if(parent(self) == classroom)
+				"^on monique's desk is a roserot redoc.
+				it's probably something personal.";
+			"^there is a roserot redoc here.";
+		],
+		message "today as usual i have to go to school.  *giggle* 
+			fortunately, it's friday, which means that tomorrow
+			is saturday.  *sigh*  i sure hope that boy in my
+			class asks me out.  oh, my, gosh, i read this totally
+			awsome story yesterday `the healer's curse' ... it
+			was, oh, my, gosh, so good.",
+		pre_button [;
+			"it's rude to read someone else's diary.  besides
+			reading it would destroy the redoc, and monique
+			would figure out something was up.";
+		],
+		before [;
+			Drop:	if(location == classroom)
+					<<PutOn self ego_desk>>;
+			PutOn:	if(location == classroom
+				&& second == ego_desk) {
+					move self to classroom;
+					"you return monique's roserot redoc.";
+				}
+		],
+	has	concealed;
+
+Object -> flag "colony flag"
+	with	name "colony" "flag" "symbol" "idealess",
+		description "the flag of the colony flies limply here.  it is
+			blue with seven pointed stars on it.   each of the
+			seven points represents one of the provinces in the
+			colony.  you live in the second point on the left.",
+		before [;
+			Pledge:	if(houitzer.hphase == 0) {
+					houitzer.hphase++;
+					houitzer.counter=0;
+				}
+				"ipleglezuncetozeflugovneulostangales...";
+		],
+	has	scenery;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	MRS. HOUITZER
+!!
+!!	notes:
+!!		an attempt to recall mrs. houtz from my distant memory (grade 2)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object -> houitzer "mrs. houitzer"
+	with	name "mrs" "teacher" "houitzer" "houtz",
+		initial "mrs. houitzer makes her presance known with a grim
+			expression piercing the transparent facade of all forms
+			of life in the immedate vacinity.",
+		description "your teacher mrs. houitzer.  as usual, she has an
+			angry look on her face.",
+		mode 0,		! 0 = school time, 1 = recess
+		counter 0,
+		hphase 0,	! FUCK you mr. farly
+		talk_counter 0,
+		daemon [;
+			self.counter++;
+			if(self.hphase == 0) {
+				if(self.counter == 3)
+					"^~to begin with today, we shall pledge
+					allegence to the flag.  everyone hail
+					to the flag.~  says mrs. houitzer.";
+				if(self.counter > 3)
+					"^~all right smarty pants, perhaps you
+					would enjoy spending detension after
+					school with all of your friends here?~
+					mrs. houitzer threatens.  you shake
+					your head enphatically.  ~then pledge
+					your allegence~ she says, this time
+					angrily.";
+			} else if(self.hphase == 1) {
+				if(self.counter == 2) {
+					"^~now, we will be memorizing.  you will
+					find today's redoc on your desks.~";
+				} else if(self.counter > 3
+				&& parent(gelb_redoc) == heaven) {
+					self.hphase++;
+					self.counter=0;
+				} else if(self.counter > 3) {
+					"^~you want me to make an example of you?~
+					mrs. houitzer threatens.  you shake 
+					your head out of fear.  ~then use that
+					gelb redoc, now!~";
+				}
+			} else if(self.hphase == 2) {
+				switch(self.counter) {
+					2 : "^~let's review for our test on monday.~
+						mrs. houitzer says.";
+					3 : "^~as you know, you are going to have
+						a test on animal identification.~
+						mrs. houitzer drolls on.";
+					5 : "^~lets start with the pictures on the
+						walls in this room.~  mrs. houitzer adds.";
+					6 : "^~right here we have a picture of some
+						bovine.  sometimes refered to as cattle,
+						or cows.~";
+					7 : "^~and this one is a large earth worm...~
+						you notice joshua kent convulse
+						slightly.";
+					8 : "^~here is an ant hill.  ants are a colony
+						insect...~";
+					9 : "^~this one is a spider.  they spin webs
+						to catch insects in so that they can
+						eat them,~  you notice rolo shiver
+						at the sight.";
+					11: "^~the last picture we have in here is of
+						a pig.  an important animal.  in the
+						last century, they nearly became
+						extinct.  thanks to special laws
+						in new los angeles colony, the hog
+						population has been growing over the
+						last twenty years.~";
+					12: self.hphase++;  self.counter=0;
+					    self.mode = 1;
+					    MoveKids(school);
+					    StopDaemon(self);
+					    give roserot_redoc ~concealed;
+					    StartKids();
+					    "^you hear the school bell ring in defiance
+						of mrs. houitzer.  she grumbles something
+						dirty about recess, as the rest of the
+						student population makes a rush for the
+						door.  you notice monique accidentally
+						leave something on her desk.";
+				}
+			} else if(self.hphase == 3) {
+				if(self.counter > 2
+				&& parent(tainted_apple) ~= houitzer) {
+					move self to hell;	! oh, if only...
+					self.hphase++; self.counter=0;
+					StopDaemon(self);
+					if(location == classroom)
+						"mrs. houitzer moves off into a back room.";
+					rtrue;
+				}
+			} else if(self.hphase == 4) {
+				if(self.counter > 2) {
+					move self to classroom;
+					self.hphase++; self.counter=0;
+					StopDaemon(self);
+					if(location == classroom)
+						"mrs. houitzer returns from a back room.";
+					rtrue;
+				}
+			}
+		],
+		react_before [;
+			if(self.mode == 0 && actor == ego) {
+				if(action == ##Go)
+					"mrs. houitzer interrupts your escape by
+					saying ~just where do you think you are going?~
+					in an acusatory tone.";
+				if(action == ##Ask or ##Tell or ##Answer or ##Tease
+				&& second ~= self) {
+					self.talk_counter++;
+					if(self.talk_counter > 5)
+						"~there shall be no further talking
+						in my classroom.~  mrs. houitzer
+						anounces with all possible hostility.
+						she is hovering quite near you.";
+					else
+						print "mrs. houitzer turns around
+						and eyes you suspicously.^^";
+				}
+			}
+			if(action == ##Drop
+			&& actor == ego)
+				"~this classroom is not a dumping ground for
+				your rubbish.~  acuses mrs. houitzer in your
+				general direction.";
+		],
+		life [;
+			Ask, Tell, Answer, Tease, Order:
+				"~children shall be spoken to, and not heard.~
+				mrs. houitzer says with devil red eyes glowing
+				like ambers.";
+			Attack, ThrowAt:
+				"you imagine mrs. houitzer has eyes in the
+				back of the head (making suprise attack
+				impossible), agility granted by the evil one
+				himself, and the luck of a jack rabit (what
+				ever that is).  this combination of attributes
+				makes her a very dangerous apponent indeed.";
+			WakeOther:
+				"unfortunately, mrs. houitzer is quite awake.";
+			Give, Show:
+				if(noun ofclass apple) {
+					apple.destroy(noun);
+					move tainted_apple to classroom;
+					StartDaemon(self);
+					"mrs. houitzer accepts your gift with
+					a suspicious raised eye brow.  she
+					puts it immedately on her desk.";
+				}
+				"maybe if you could think of a more traditional
+				gift to bribe mrs. houitzer with.";
+		],
+	has	animate female proper;
+
+Object -> -> tainted_apple "tainted apple"
+	with	name "tainted" "apple",
+		initial "an apple is lying on mrs. houitzer's desk.",
+		description "this apple has been tainted by mrs. houitzer.  you
+			can just make out her finger prints.",
+		before [;
+			Take:	if(parent(houitzer) == location)
+					"you can't take mrs. houitzer's apple
+					back while she's watching.";
+				StartDaemon(houitzer);
+			Eat:	"the thought of eating an apple touched
+				by mrs. houitzer makes you a little sick.";
+		],
+		counter 0,
+		inc_counter [ x;
+			self.counter++;
+			if(self.counter == 2) {
+				x = parent(parent(self));
+				move self to hell;
+				"oh dear.  ", (the) x, " has eaten your
+				tainted apple.  damn vending machines.";
+			}
+		],
+	has	edible;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	LIQUID SECTOR
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object liquid_sector "liquid sector"
+	with	description "this is liquid sector.  there are two businesses
+			located in this section of liquid sector.  the first
+			you notice is a redoc copy center.  the second is
+			liquid burger, a fine eating establishment, assuming
+			you like swimming in your food.  there is also an old
+			woman here.  to the south is a forest.  your school
+			playground is to the west.",
+		w_to "that pesky dog appears to be in the way.",
+		s_to lost_woods,
+	has	light outside;
+
+Object -> old_woman "old woman"
+	with	name "old" "woman" "lady" "dame" "frau" "madam",
+		description "this old woman is quite elderly.  and
+			holeless, i'm afraid.  her rags seem only barely
+			adequate to keep the cold air out.",
+		life [;
+			Ask, Answer, Tell, Tease:
+				"~pay me and i'll talk.~";
+			Show :	"showing isn't good enough.  you will have
+				to give it to the old woman to get a
+				reaction.";
+			Give :	if(noun == coin) {
+					move noun to self;
+					"~boy you're rich.~";
+				}
+				if(noun == burger) {
+					move noun to self;
+					"~go north, west, south, west to
+					the forest of maze~";
+				}
+				"~this ain't enough to talk.~";
+		],
+	has	animate female scenery;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	COPY CENTER
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object -> copy_center "redoc copy center"
+	with	name "copy" "center" "cp",
+		inside_description [ blarph;
+			print "you are in the copy center.  it appears to
+			be completely automated.  there are two devices, you
+			recognize the first as being a redoc copying
+			machine.  the second is a redoc recorder.  they both
+			appear to have plates for scanning finger prints, so
+			that they can then charge the finger print owner's
+			account.^";
+			objectloop(blarph in copy_machine or recorder_machine) {
+				if(blarph ofclass plate)
+					blarph.list();
+			}
+		],
+	has	enterable scenery;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	COPY MACHINE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object -> -> copy_machine "copy machine"
+	with	name "cp" "copy" "machine",
+		description "just your standard redoc copy machine.  it has a
+			finger plate for authentication, a input plate
+			to put the redoc, and an output plate on and a button
+			for activation.",
+		pre_button [ x1 y1 blarph;
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			!!	authenticate
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			x1 = 0;
+			objectloop(blarph in copy_machine_plate) x1 = blarph;
+			if(x1 == 0)
+				print "you put your left pinky on the
+					copy machine's finger plate.  ";
+			!print "debug: x1 = ", (object) x1, "^";
+			if(x1 ~= tainted_apple)
+				"you press the button on the copy machine.
+				*beep* *whiz* *beep* *beep*
+				~authentication failed.~";
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			!!	is it the pink redoc?
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			x1 = 0;
+			objectloop(blarph in copy_machine_input) x1 = blarph;
+			if(x1 == 0)
+				"before attempting to make a copy, you
+				realize the copy machine's input plate is 
+				empty.";
+			if(not(x1 ofclass redoc))
+				"before attempting to make a copy, you
+				realize the object on the input plate is
+				not a redoc.";
+			if(x1 ~= roserot_redoc)
+				"before attempting to make a copy, you
+				realize there is no point in copying the
+				redoc on the input plate.";
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			!!	check output plate
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			y1 = 0;
+			objectloop(blarph in copy_machine_output) y1 = blarph;
+			if(y1 ~= 0)
+				"there appears to be something blocking the
+				output plate.";
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			!!	make sure we haven't already made the copy...
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			if(parent(copy_redoc) ~= hell)
+				"you've already made a copy of the roserot
+				redoc.";
+
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			!!	make the copy
+			!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+			copy_redoc.ach = x1.ach;
+			copy_redoc.preface = x1.preface;
+			copy_redoc.message = x1.message;
+			move copy_redoc to copy_machine_output;
+			print "you press the button on the copy machine, and a
+				copy of the roserot redoc materalizes on the
+				output plate.";
+			tainted_apple.inc_counter();
+			"";
+		],
+		capacity 3,
+	has	scenery button supporter;
+
+class plate 
+	with	name "plate",
+		capacity 1,
+		list [;
+			if(child(self) ~= 0)
+				print "^on ", (the) self, " is ",
+					(a) child(self), ".^";
+		],
+	has	supporter scenery;
+
+plate -> -> -> copy_machine_plate "copy finger plate"
+	with	name "cp" "copy" "finger",
+		description "a device for authenticating users.";
+
+plate -> -> -> copy_machine_input "copy input plate"
+	with	name "input" "cp" "copy",
+		description "this is where the input redoc goes.";
+
+plate -> -> -> copy_machine_output "copy output plate"
+	with	name "output" "cp" "copy",
+		description "this is where the new redoc comes out, when
+			you use the copier.";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	RECORDER
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object -> -> recorder_machine "recorder"
+	with	name "recorder" "machine",
+		description "just your standard redoc recording machine. there
+			is a brainphone on the side for reading your thoughts,
+			and an output plate for the redoc which is created.  there
+			is also a button for activation.",
+		buttonf [;
+			!! FIXME !!
+		],
+		capacity 3,
+	has	scenery button supporter;
+
+plate -> -> -> recorder_plate "recorder finger plate"
+	with	name "recorder" "finger",
+		description "a device for authenticating users.";
+
+Object -> -> -> brainphone "brainphone"
+	with	name "brain" "phone" "microphone" "brainphone",
+		description "where the recorder takes in the users thoughts
+			so they can be recorded.",
+	has	scenery;
+
+plate -> -> -> recorder_machine_output "recorder output plate"
+	with	name "recorder" "output",
+		description "this is where the new redoc comes out, when
+			you use the recorder.";
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	LIQUID BURGER
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object -> liquid_burger "liquid burger"
+	with	name "liquid" "burger" "carls" "junior" "jr",
+		inside_description [;
+			print "liquid burger seems to be completely
+				automated.  there is a burger vending machine
+				on one wall.";
+			if(parent(burger) == self
+			&& burger has scenery)
+				"  in one corner of the room, near the machine,
+				a western burger has been disgarded.";
+			"";
+		],
+	has	enterable scenery proper;
+
+Object -> -> vending_machine "vending machine"
+	with	name "vending" "machine",
+		description "it's tall and shines like the day it rolled off the
+			assembly line.  somehow, this is appropriate considering
+			the kind of food it produces.",
+	has	scenery;
+
+Object -> -> burger "western burger"	! this is moderatly disgusting
+	with	name "liquid" "burger" "western",
+		description "a juicy western burger from luquid burger.  as you
+			hold the liquid meal, special sause oozes onto your
+			hands.",
+		after [;
+			Eat :	"you appear to have indagestion.";
+		],
+	has	edible;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	LOST WOODS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Object lost_woods "lost woods"
+	with	description "you are in a forrest, which looks something akin
+			to a maze.  there are paths to the north, east, south
+			and west, but they all look the same.",
+		state 1,
+		e_to [; self.state = 1; return liquid_sector; ],
+		n_to [; self.state = 2; return lost_woods; ],
+		w_to [;
+			if(self.state == 4) {
+				self.state = 1;
+				if(parent(burger) == ego
+				|| parent(burger) == pillow)
+					move burger to liquid_burger;
+				return gully1;
+			}
+			if(self.state == 2) self.state = 3; else self.state = 1;
+			return lost_woods;
+		],
+		s_to [;
+			if(self.state == 3) self.state = 4; else self.state = 1; 
+			return lost_woods;
+		]
+	has	light;
+
+Object -> trees "trees"
+	with	name "trees" "plants" "tree" "plant",
+		description "you are surrounded by many trees.",
+		before [;
+			Climb: "unfortunately, there are no good trees for
+				climbing here.";
+		],
+	has	scenery pluralname;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	IN THE BEGINNING...
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ Initialise pkey;
+	!@set_colour 0 2;
+	!@erase_window -1;
+
+	StartDaemon(grasshopper1);
+	StartDaemon(grasshopper2);
+	StartDaemon(grasshopper3);
+	StartDaemon(grasshopper4);
+	StartDaemon(grasshopper5);
+	StartDaemon(grasshopper6);
+	StartDaemon(spider);
+	StartDaemon(spider_web);
+	StartDaemon(fly1);
+	StartDaemon(fly2);
+	StartDaemon(worm1);
+	StartDaemon(worm2);
+	StartDaemon(worm3);
+	StartDaemon(bird);
+
+	player = ego;
+	move kent to log_cabin;
+
+	#ifndef DEBUG;
+	font off;
+	box 	"~boys are nature's answer to that"
+	    	"false belief that there is no such"
+		"thing as perpetual motion.  a boy"
+		"can swim like a fish, run like a"
+		"deer, climb like a squirrel, balk"
+		"like a mule, bellow like a bull,"
+		"eat like a pig, or act like a"
+		"jackass, according to climatic"
+		"conditions.~"
+                "  - herbert hoover"
+                "    thirty-first president"
+		"    of the old regime";
+
+	@read_char 1 -> pkey;
+	@erase_window -1;
+
+        box	"~never eat more than you can lift.~"
+                "  - miss piggy";
+
+	@read_char 1 -> pkey;
+	@erase_window -1;
+
+	font on;
+	#endif;
+	#ifdef DEBUG;
+	pkey = 0;
+	#endif;
+
+	location = bedroom;
+	style underline;
+	print "^^^~when i was growing up, new los angeles was still a
+wild place. full of people who were much more interested in doing what
+they wanted to be doing, rather than what the government thought was in
+their best interest.  `evil' according to the great government of old
+earth ran far too close to rampant on our small colony world, but most of
+the `evil' elements felt that they were too far away from washington for
+that rather pathetic power to do anything about it.~^";
+
+	print "^~i lived in one of the better neighborhoods.  a better
+neighborhood being well defined as any place that you can walk down the
+street with a reasonable chance of survival.  quite frankly, the part of
+nla which i lived in was much more wealthy than rest of the colony. which
+was good for me and my family, even our neighbors, but you have to wonder
+why so much of the money on all of colony was basically contained within
+the rather poorly defined borders of my neighborhood.~^^";
+	style roman;
+	rtrue;
+
+];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	MENUs
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !! hints
+
+[ HelpSub;
+	item_name = "one day in the life of uncle fatty";
+	item_width = 20;
+	DoMenu("helpful information for a four (and a half) year old:^
+		^     instructions
+		^     special verbs
+		^     about the author
+		^     special thanks
+		^     the perfect pig
+		^     hint
+		^     legal^", HelpMenu, HelpInfo);
+];
+
+[ HelpMenu;
+	switch(menu_item) {
+		0 : return 7;
+		1 : item_name = "conversing with the interactive remix";
+		    item_width = 20;
+		2 : item_name = "special verbs";
+		    item_width = 7;
+		3 : item_name = "richard ess";
+		    item_width = 5;
+		4 : item_name = "danke schon";
+		    item_width =  5;
+		5 : item_name = "uncle fatty (perfect pig) copyright 1996 tirrus vae";
+		    item_width = 30;
+		7 : item_name = "legal";
+		    item_width = 3;
+	}
+];
+
+Include "special";	! it's the old speciaList
+
+[ HelpInfo;
+	switch(menu_item) {
+		1 : "uncle fatty (interactive) was written in inform with
+	a modified version of the standard library.  you should be able to
+	type simple sentences to achieve all the major goals of the
+	interactive remix.  there is no way to get stuck in a
+	situation where you cannot win.  you may not necessarily get the
+	optimal solution, but there should be no reason to be overly
+	concerned about your behavior the first time you play.";
+
+		2 : ". blarph ^. pledge^. recall^. sigh";
+
+		3 : "richard ess has been playing, designing and writing
+	computer games of various types for most of his non-adult (read :
+	all of his) life.  one of his more popular is `orange attack'
+	which consists of a huge bulk of the color orange advancing on
+	the player controled `triangle'.  some of his less
+	abstract games he has worked on include the graphical adventure
+	games `the last sunset' and `homeland' from core software
+	international.  this is his first ~interactive fiction~, and as
+	such, he'd be interested in knowing what you think.  richard also
+	writes non-interactive fiction.  in fact, uncle fatty is based on
+	a micro short story which has been evolving (and will likely
+	continue to keep evolving) over the past five years.^^
+	^ web: http://www.whitedactyl.com/rs
+	^ email: rms@@64whitedactyl.com";
+
+		4 :	font off;
+			print (string) specialist;
+			font on;
+			rtrue;
+
+		5 : "-=the perfect pig=-
+	^(soon to be noticeably absent from the film adaptation of 
+	^ _uncle fatty:  remorse of a four-year-old killer_)*
+	^
+	^   i got my grease in the frying pan drizzling
+	^   can't keep control, can't keep track of how it's sizzling
+	^   i got my eggs but they're just no good
+	^   without the pig they don't taste like they should
+	^
+	^   i made some toast, but the crust was really terrible 
+	^   my morning meal's turning out to be unbearable
+	^   can't eat a steak, i want bacon right now
+	^   i need the pig and not some fucking cow
+	^
+	^   and i fed you
+	^   and i kept you
+	^   and they killed you
+	^   and i ate you   
+	^   
+	^   you are the perfect pig, the perfect pig, the perfect pig
+	^   you are the perfect pig, the perfect pig, the perfect pig
+	^   
+	^   you make me fat, when i'm all thin inside
+	^   i see some ham, i get all misty-eyed      
+	^   a pork craving straight to my heart
+	^   'reminds me of the pig they sliced apart.'
+	^   
+	^   my fork wants to carve a piece of you
+	^   my hunger wants to make a meal of you
+	^   my soul is so afraid to realize
+	^   a part of uncle fatty's left in me
+	^   
+	^   and i fed you
+	^   and i kept you
+	^   and they killed you
+	^   and i ate you
+	^   
+	^   you are the perfect pig, the perfect pig, the perfect pig
+	^   you are the perfect pig, the perfect pig, the perfect pig
+	^
+	^   without you, without you breakfast just isn't the same
+	^   without you, it's not as much fun to carve up the pieces
+	^   without you, without you breakfast just isn't the same
+	^   without you, it's not as much fun to carve up the pieces
+	^
+	^
+	^
+	^*it'll be on the soundtrack, though.";
+
+		6 : return Hint();
+
+		7 : "uncle fatty is copyright 1996 richard ess.  all
+	rights reserved.^^
+
+	the uncle fatty remixes (except the perfect pig remix) are
+	copyright 1994, 1995, 1996, 1997, 1998, 1999, 2000 richard ess.
+	all rights reserved.^^
+
+	`the perfect pig' or uncle fatty (perfect pig) is copyright 1996
+	tirrus vae.  all rights reserved.^^
+
+	you may read, but not distribute uncle fatty and the
+	non-interactive remixes of uncle fatty.  they are all available
+	from the richard ess or uncle fatty web sites
+	(http://www.whitedactyl.com/rs/).  any other non-interactive
+	rendition of uncle fatty is an unofficial illegal version.^^
+
+	you may read, play and distribute the interactive remix of uncle
+	fatty under the following conditions:
+	^    1. uncle fatty (interactive) may not be sold, or resold.  you
+	may charge a reasonable fee for distribution, such as the cost
+	of the cd media it resides on.
+	^    2. you may not reverse engineer or modify uncle fatty
+	(interactive).  uncle fatty (interactive) should have come with
+	a pgp signature.  to check the signature, go to the richard ess
+	web site (http://www.whitedactyl.com/rs/).  if the uncle fatty
+	(interactive) you have did not come with a pgp signature, or the
+	signature did not match, then your version of uncle fatty an
+	unofficial illegal version.
+	^    3. there is no implicit or implied warranty.  play uncle
+	fatty (interactive) at your own risk.  running this game on an
+	uncertified (ie. `any') interpreter may fry your computer into a
+	million pieces.  i can't see how, but i can't guarantee that it
+	won't.^^
+
+	uncle fatty and the uncle fatty remixes include
+	(as of June 2000):^
+	uncle fatty^
+	uncle fatty (liar)^
+	uncle fatty (local)^
+	the perfect pig^
+	uncle fatty (verbal)^
+	uncle fatty (red sand)^
+	uncle fatty (annotated)^
+	uncle fatty (red sand ii)^
+	uncle fatty (interactive)^
+	uncle fatty (taco bell)^
+	uncle fatty (red skies)";
+
+	}
+];
+
+[ GiveHint hint keypress;	!! ripped off from designers manual
+	print (string) hint; new_line; 
+	@read_char 1 0 0 -> keypress;
+	if (keypress == 'H' or 'h') rfalse;
+	rtrue;
+];
+
+Global HintInstructions = "(press enter to return to menu, or press h for next hint)^^";
+
+[ Hint;
+	print (string) HintInstructions;
+	if(schwartz_redoc notin heaven) {
+		if(GiveHint("(1/4) don't know what to do?  sounds like
+				you need a mission in life.") == 1) return 2;
+		if(GiveHint("(2/4) maybe that's a bit drastic.  you need
+				a note with a list of chores on it.") == 1) return 2;
+		if(GiveHint("(3/4) there is a schwartz redoc in your bed room. this
+			is the futuristic equivalent to a post-it note.") == 1) return 2;
+		"(4/4) press button on schwartz redoc.";
+	}
+	if(black_goals ~= BG_ALL) {
+		item_name = "black goals";
+		item_width = 5;
+		DoMenu("before you go to school, you will need to:^
+		^     feed yourself
+		^     feed uncle fatty
+		^     deliver the mail", Hint2Menu, Hint2Info);
+		return 2;
+	}
+	"no hints for this part of the game.";
+];
+
+[ Hint2Menu;
+	switch(menu_item) {
+		0 : return 3;
+		1 : item_name = "feeding yourself";
+		    item_width = 8;
+		2 : item_name = "feeding uncle fatty";
+		    item_width = 10;
+		3 : item_name = "delivering the mail";
+		    item_width = 10;
+	}
+];
+
+[ Hint2Info;
+	print (string) HintInstructions;
+	switch(menu_item) {
+	1:
+		if(GiveHint("(1/4) you need to find some food.") == 1) return 2;
+		if(GiveHint("(2/4) kitchen maybe?") == 1) return 2;
+		if(GiveHint("(3/4) manners?  don't eat right out of the box.") == 1) return 2;
+		"(4/4) open box.  pour cereal into bowl.  pour milk into bowl.";
+	2:
+		if(GiveHint("(1/3) you either need to be able to get
+			the food out of the kitchen undetected, or find
+			some outside") == 1) return 2;
+		if(GiveHint("(2/3) technology is your friend.") == 1) return 2;
+		"(3/3) there is a solution in the plastic garden.";
+	3:	if(GiveHint("(1/3) where would the mail be?") == 1) return 2;
+		if(GiveHint("(2/3) mailbox in the front yard.  right. now
+			what?") == 1) return 2;
+		"(3/3) give it to your mother in the kitchen.";
+	}
+];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	GRAMMAR
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.FINGER
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ FingerSub;
+	if(noun == 0)
+		"don't point that here.";
+	if(noun ofclass girl)
+		"you'd like to, but this is a family game.";
+	"maybe not.";
+];
+
+[ FingerOllisgSub;
+"Login name: ollisg                    In real life: Graham Ollis
+^Site Info: BFCX,ollisg@@64us.ibm.com
+^Directory: /afs/eda/u/ollisg            Shell: /bin/ksh
+^On since May 15 10:14:22 on lft0, 2 days 2 hours Idle Time
+^On since Jun 06 07:28:40 on pts/0
+^On since Jun 06 07:28:45 on pts/1
+^    from :0.0
+^On since Jun 06 07:28:45 on pts/2
+^    from :0.0
+^On since Jun 06 07:28:46 on pts/3, 15 minutes Idle Time
+^    from :0.0
+^On since Jun 06 07:28:46 on pts/4, 9 minutes 38 seconds Idle Time
+^    from :0.0
+^On since Jun 06 08:21:57 on pts/6, 13 minutes Idle Time
+^    from :0.0
+^
+^Plan:
+^                    ~How many ages hence
+^Shall this our lofty scene be acted over
+^In states unborn and accents yet unknown!~
+^
+^~Heads of state                 ~What a terrible thing
+^ Who ride and wrangle            To have lost one's mind
+^ Who lookie your face            Or not to have a mind
+^ From more than one angle        At all.
+^ Can cut you from                How true that is.~
+^ Their bloated budgets
+^ Like sharpened knives          ~Welcome to my mind
+^ Through Chicken McNuggets~      (please wipe your feet)~
+^
+^Graham THE Ollis <ollisg@@64us.ibm.com>
+^(914) 892-4130";
+];
+
+Verb 'finger'
+	*				-> Finger
+	* noun				-> Finger
+	* 'ollisg'			-> FingerOllisg;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.UNAME
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ UnameSub;	!! FIXME !! there should be a way to parse the arguments
+	"UncleFattyOS";
+];
+
+[ UnameAllSub;
+	"UncleFattyOS betos.arizona.edu 0.9 zmachine";
+];
+
+Verb meta 'uname'
+	*				-> Uname
+	* '-a'				-> UnameAll;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.WAITPID
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ WaitPidSub;
+	if(noun ~= 0)
+		"you'll be doing a lot of nothing if you wait for that to
+		expire.";
+	"not in this operating system buddie.  if you want to get
+	something productive done, you should have booted linux.";
+];
+
+Verb 'waitpid'
+	*	-> WaitPid
+	* noun	-> WaitPid;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.SHOW
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ ShowScope i;
+	switch(scope_stage) {
+		1: rfalse;
+		2: !print "directly held:^";
+		   objectloop(i in ego) {
+			!print "in scope: ", (object) i, "^";
+			PlaceInScope(i);
+		   }
+		   !print "in jar: (if jar is held)^";
+		   if(parent(jar) == ego)
+			objectloop(i in jar) {
+				!print "in scope: ", (object) i, "^";
+				PlaceInScope(i);
+			}
+		   !print "in pillow: (if pillow is held)^";
+		   if(parent(pillow) == ego)
+			objectloop(i in pillow) {
+				!print "in scope: ", (object) i, "^";
+				PlaceInScope(i);
+			}
+		   rtrue;
+		3: "that is not something you have handy at the moment.";
+	}
+];
+
+[ ShowSub;
+	if(parent(noun) ~= player or pillow or jar)
+		return L__M(##Show,1,noun);
+
+	if (second==player)
+		<<Examine noun>>;
+
+	if (RunLife(second,##Show)~=0)
+		rfalse;
+
+	L__M(##Show,2,second);
+];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Include "grammar";
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.JUMP
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ JumpSub;
+	"you ascend into the air.  you fall.  you have acomplished nothing.";
+];
+
+[ JumpOverSub;
+	"maybe not.";
+];
+
+[ JumpOnSub;
+	"maybe not.";
+];
+
+Extend 'jump'
+	* 'on' noun			-> JumpOn;
+
+Extend 'hop'
+	* 'on' noun			-> JumpOn;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.DRESS - verb.UNDRESS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ DressSub;	!! FIXME !! add defaults for undressed too
+		!! FIXME !! hrm . remove those from error message here.
+	if(parent(clothes) ~= ego) {
+		<Take clothes>;
+		if(parent(clothes) ~= ego)
+			rtrue;
+	}
+	<<Wear clothes>>;
+];
+
+[ UnDressSub;
+	<<Disrobe clothes>>;
+];
+
+Verb 'dress'
+	*			-> Dress;
+
+Verb 'undress'
+	*			-> UnDress;
+
+Extend 'get'
+	* 'dressed'		-> Dress
+	* 'undressed'		-> UnDress;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.YELL
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ YellSub;
+	if(noun == 0 || noun hasnt animate)
+		"you bellow at the top of your lungs.";
+	"it's not nice to just yell at living beings like that.";
+];
+
+Verb 'yell'
+	*			-> Yell
+	* 'at' noun		-> Yell;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.TAINT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ TaintSub;
+	if(noun == 0)
+		"taint what?";
+	"that isn't something you can taint.";
+];
+
+Verb 'taint'
+	*			-> Taint
+	* noun			-> Taint
+	* noun 'with' noun	-> Taint;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.EAT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ EatSub;
+	if(ObjectIsUntouchable(noun)) return;
+	if(noun hasnt edible) "you aren't that hungry.";
+	if(AfterRoutines()==1) rtrue;
+	if(ego.eaten >= 4) "you're really quite full.";
+	print "you eat ", (the) noun, ".  ";
+	ego.eaten++;
+	Achieved(6);
+	if(noun ofclass apple) {
+		apple.destroy(noun);
+	} else {
+		remove noun;
+	}
+	print "tasty.";
+	BlackGoals(BG_FEED_SELF);
+	rtrue;
+];
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.BLARPH & verb.SIGH & verb.WAKE(self) & verb.PRAY
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ BlarphSub;
+	"you say ~blarph~ disappointedly.";
+];
+
+Verb 'blarph' 
+	* -> Blarph; 
+
+[ SighSub;
+	"you say the word ~sigh~ and wonder why you don't just sigh like
+	normal people.";
+];
+
+Verb 'sigh' 
+	* -> Sigh;
+
+[ WakeSub;
+	"you aren't asleep yet.";
+];
+
+[ PraySub;
+	style underline;
+	print "~in general, the people of nla of the time were pretty godless.
+	not knowing better either way, i didn't know what praying was,
+	much less the correct procedure.~";
+	style roman;
+	rtrue;
+];
+
+Extend 'exit'
+	* noun				-> GetOff;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.KNOCK
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ KnockSub;
+	if(ObjectIsUntouchable(noun)) return;
+	if(noun has door) {
+		if(noun has open)
+			"", (the) noun, " is already open.";
+		"you knock on ", (the) noun, " fruitlessly.";
+	} else {
+		"you can't knock on that.";
+	}
+];
+
+Verb 'knock' 'bang' 
+	* 'on' noun			-> Knock;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.PUSH(button)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ PushButtonSub;
+	if(parent(noun) == ego
+	|| parent(noun) == pillow
+	|| noun has scenery) {
+		if(noun has button) {
+			if(noun provides pre_button)
+				if(noun.pre_button()) rtrue;
+			print "you press the button on ", (the) noun, ".^";
+			noun.buttonf();
+		} else {
+			"that doesn't have a button.";
+		}
+	} else {
+		"you don't have that.";
+	}
+];
+
+Extend 'push'
+	* 'button' 'on' noun		-> PushButton
+	* noun 'button'			-> PushButton;
+
+Extend 'press'
+	* 'button' 'on' noun		-> PushButton
+	* noun 'button'			-> PushButton;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.DIG
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ DigSub;
+	if(noun == 0)
+		"what do you want to dig?";
+	if(noun == garden_dirt) {
+		if(taken_flower == 1) {
+			if(replicator_gadget has concealed) {
+				give replicator_gadget ~concealed;
+				move replicator_gadget to plastic_garden;
+				"your digging reveals a green gadget.";
+			} else {
+				"you already dug there.";
+			}
+		} else {
+			"the flowers are in the way.";
+		}
+	}
+	"you don't want to dig into that.";
+];
+
+Extend 'dig'
+	*				-> Dig
+	*  noun				-> Dig
+	* 'in' noun			-> Dig;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.READ                    !! need to comment out read from library !!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ ReadSub;
+	if(ego.age == 4) {
+		"as it happens, you haven't learned to read yet.  you're only
+		four and a half you know.";
+	} else {
+		"not now.";
+	}
+]; 
+
+Verb 'read'
+	*				-> Read
+	* noun				-> Read
+	* 'about' 'topic' 'in' noun	-> Read
+	* topic 'in' noun		-> Read;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.POUR
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ PourSub;
+	if(noun == 0) "what would you like to pour?";
+	if(second == 0) "what would you like to pour ", (the) noun, " into?";
+
+	if(ObjectIsUntouchable(noun)) return;
+	if(noun hasnt liquid && noun ~= cereal) "it never rains, but it pours.";
+	if(AfterRoutines()==1) rtrue;
+	"that is not a good thing to pour into.";
+];
+
+Verb 'pour'
+	*				-> Pour
+	* noun				-> Pour
+	* noun 'into'/'in' noun		-> Pour;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.RECALL
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ RecallSimpleSub n pl o;
+	n=0;
+	objectloop(o in heaven) {
+		object_list --> (++n) = o;
+		if(o has pluralname) pl = 1;
+	}
+	if(n == 0) {
+		"you don't recall anything.";
+	} else if(n == 1) {
+		o = object_list --> 1;
+		print (string) o.color, ":^";
+		if(o provides messagef) {
+			o.messagef();
+		} else {
+			print (string) o.message;
+		}
+		print "^";
+	} else {
+		print "which redoc would you like to recall?  in your memory
+			are ";
+		PrintObjectList(n);
+		"^";	
+	}
+];
+
+[ RecallScope i;
+	switch(scope_stage) {
+		1: rfalse;
+		2: objectloop(i in heaven) PlaceInScope(i); rtrue;
+		3: "you have no such recollection.";
+	}
+];
+
+[ RecallSub;
+	print (string) noun.color, ":^";
+	if(noun provides messagef) {
+		noun.messagef();
+	} else {
+		print (string) noun.message;
+	}
+	"^";
+];
+
+Verb 'recall' 'remember'
+	*				-> RecallSimple
+	* scope=RecallScope		-> Recall;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.PLEDGE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ PledgeSub;
+	if(noun == 0)
+		"what do you want to pledge allegence to?";
+	"you can't pledge allegence to that.";
+];
+
+Verb 'pledge'
+	*				-> Pledge
+	* 'allegence'			-> Pledge
+	* 'allegence' 'to' noun		-> Pledge
+	* 'to' noun			-> Pledge;
+
+Verb 'hail'
+	*				-> Pledge
+	* noun				-> Pledge
+	* 'to' noun			-> Pledge;
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.LAUNCH
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ LaunchSub;
+	if(noun == 0)
+		"what would you like to launch?";
+	if(second == 0)
+		"at what would you like to launch ", (the) noun, "?";
+	"you don't want to do that right now.";
+];
+
+Verb 'toss' = 'throw';
+
+Verb 'launch'
+	*				-> Launch
+	* noun				-> Launch
+	* noun 'at' noun		-> Launch;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.SLIDE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ SlideSub;
+	"You cannot do that here.";
+];
+
+Verb 'slide'
+	*				-> Slide
+	* 'down'			-> Slide
+	* noun				-> Slide
+	* 'down' noun			-> Slide;
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.PUNCH
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ PunchHoleSub;
+	if(noun ==0)
+		"what do you want to punch a hole in?";
+	"that is not something you can punch a hole in.";
+];
+
+[ VagueMakeSub;
+	"say what?";
+];
+
+[ MakeSub;
+	"that is not something you can make.";
+];
+
+Verb 'make'
+	*				-> VagueMake
+	* noun				-> Make
+	* 'hole' 'in' noun		-> PunchHole
+	* 'hole' 'in' noun 'with' noun	-> PunchHole
+	* 'fun'				-> Tease
+	* 'fun' 'of' noun		-> Tease;
+
+Verb 'poke' 'pierce'
+	*				-> VagueMake
+	* noun				-> PunchHole
+	* 'hole' 'in' noun		-> PunchHole
+	* noun				-> PunchHole
+	* 'hole' 'in' noun 'with' noun	-> PunchHole
+	* noun 'with' noun		-> PunchHole;
+
+Verb 'create' 'force'
+	*				-> VagueMake
+	* 'hole' 'in' noun		-> PunchHole
+	* 'hole' 'in' noun 'with' noun	-> PunchHole;
+
+Extend 'punch'
+	* 'hole'			-> PunchHole
+	* 'hole' 'in' noun		-> PunchHole
+	* 'hole' 'in' noun 'with' noun	-> PunchHole;
+
+Extend 'put'
+	* 'hole'			-> PunchHole
+	* 'hole' 'in' noun		-> PunchHole
+	* 'hole' 'in' noun 'with' noun	-> PunchHole;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.CAPTURE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !! does this work? put spider in jar.  it should.
+
+[ CaptureSub;
+	"You will find it difficult to capture ",
+	(the) noun, " in ",
+	(the) second, "."; 
+];
+
+Verb 'capture' 'catch'
+	* multi				-> Take
+	* multiinside 'from' noun	-> Remove
+	* multiinside 'off' noun	-> Remove
+	* noun 'in' noun		-> Capture;
+
+Extend 'take'
+	* noun 'in' noun		-> Capture;
+
+Extend 'get'
+	* noun 'in' noun		-> Capture;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.TEASE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !! need to insert like a whole slew of insults.
+
+[ TeaseSub;
+	if(noun == 0)
+		"who do you want to tease?";
+	if(noun hasnt animate)
+		"it is hardly satisfying to tease something
+		inanimate.";
+	if(noun provides life
+	&& RunLife(noun, ##Tease))
+		rtrue;
+	"you can't think of anything appropriate.";
+];
+
+Verb 'tease' 'harass'
+	*				-> Tease
+	* noun				-> Tease;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.TAG
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ TagSub;
+	if(noun == 0)
+		"what do you want to tag?";
+	if(noun hasnt animate)
+		"that is not something you can tag.";
+	if(noun ofclass girl)
+		"that will not solve anything.";
+	if(noun ofclass boy
+	&& parent(cooties) == ego)
+		<<Give cooties noun>>;
+	"you somehow feel as though you have acomplished nothing.";
+];
+
+Verb 'tag'
+	*				-> Tag
+	* noun				-> Tag;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.CHASE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ ChaseSub;
+	if(noun == 0)
+		"whom do you want to chase?";
+	if(second == 0)
+		"what do you want to use to chase ", (the) noun, " with.";
+	"", (the) noun, " does not appear to fear ", (the) second, ".";
+];
+
+Verb 'chase'
+	*				-> Chase
+	* noun				-> Chase
+	* noun 'with' noun		-> Chase;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.STEAL
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ StealSub;
+	if(noun == 0)
+		"please specify what you want to steal.";
+	if(second ~= 0) {
+		if(second hasnt animate)
+			"that is not something you can steal from.";
+		if(second has female)
+			"it wouldn't be nice to steal from her.";
+		"it wouldn't be nice to steal from him.";
+	}
+	"that is not something you can steal.";
+];
+
+Verb 'steal'
+	*				-> Steal
+	* noun				-> Steal
+	* noun 'from' noun		-> Steal;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.CHECKOUT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ CheckSub;
+	"still here.";
+];
+
+[ CheckOutSub;
+	if(noun ofclass girl)
+		"mmhmm.  hot.";
+	ExamineSub();
+];
+
+Extend 'check'
+	*				-> Check
+	* 'out'				-> Look
+	* 'out' noun			-> CheckOut;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.CLIMB
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[ ClimbDownSub;
+	if(noun == 0)
+		"climb down what?";
+	if(location == up_tree)
+		<<Go d_obj>>;
+	"you can't climb down that.";
+];
+
+Extend 'climb'
+	* 'down'			-> ClimbDown
+	* 'down' noun			-> ClimbDown;
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!	verb.META
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!! FIXME !! implement my own `places' and `objects' verbs
+
+Verb meta 'help' 'about' 'hint'
+	*				-> Help;
+
+#ifdef DEBUG;
+
+[ ShowKid kid room;
+	room = parent(kid);
+	print "", (object) kid, " is in ", (the) room;
+	if(room provides x
+	&& room provides y)
+		print "[", room.x, ",", room.y, "]";
+	print "^";
+];
+
+[ KidsScope i;
+	switch(scope_stage) {
+		1: rfalse;
+		2: for(i=0: i<NumKids: i++) PlaceInScope(Kids --> i);
+		   PlaceInScope(ego);
+		   PlaceInScope(bird); 
+		   PlaceInScope(houitzer);
+		   PlaceInScope(worm1);
+		   PlaceInScope(worm2);
+		   PlaceInScope(worm3);
+		   rtrue;
+		3: "invalid kid.";
+	}
+];
+
+[ ShowKidsSub i;
+	if(noun ~= 0) {
+		ShowKid(noun);
+		rtrue;
+	}
+	for(i=0: i<NumKids: i++) {
+		ShowKid(Kids --> i);
+	}
+	ShowKid(ego);
+];
+
+Verb meta 'kids' 'kid'
+	*				-> ShowKids
+	* scope=KidsScope		-> ShowKids;
+
+[ ShowEgoLocationSub;
+	ShowKid(ego);
+];
+
+Verb meta 'locate'
+	*				-> ShowEgoLocation;
+
+[ StartSub; StartKids(); "kids kick restart..."; ];
+[ StopSub; StopKids(); "kids halt!"; ];
+
+Verb meta 'start'
+	*				-> Start;
+
+Verb meta 'stop'
+	*				-> Stop;
+
+#endif;
+
+!!	that's all folks
